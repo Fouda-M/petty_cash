@@ -9,9 +9,9 @@ import BalanceSummary from "@/components/transactions/BalanceSummary";
 import type { Transaction } from "@/types";
 import { TransactionType } from "@/types"; 
 import { useToast } from "@/hooks/use-toast";
-import { Button } from "@/components/ui/button";
-import { Printer } from "lucide-react";
-import PrintableReport from "@/components/print/PrintableReport";
+// import { Button } from "@/components/ui/button"; // Removed
+// import { Printer } from "lucide-react"; // Removed
+// import PrintableReport from "@/components/print/PrintableReport"; // Removed
 import {
   Dialog,
   DialogContent,
@@ -109,19 +109,19 @@ export default function HomePage() {
     handleCloseEditModal();
   };
 
-  const handlePrint = () => {
-    window.print();
-  };
+  // const handlePrint = () => { // Removed
+  //   window.print();
+  // };
 
   return (
     <div className="container mx-auto p-4 md:p-8 space-y-8">
-      <div className="flex justify-end mb-4 no-print">
+      {/* <div className="flex justify-end mb-4 no-print"> // Removed print button container
         <Button onClick={handlePrint} variant="outline">
           <Printer className="ms-2 h-4 w-4" />
           حفظ كـ PDF / طباعة
         </Button>
-      </div>
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start no-print">
+      </div> */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start"> {/* Removed no-print class */}
         <div className="lg:col-span-1 space-y-8">
           <AddTransactionForm onTransactionAdded={handleAddTransaction} />
           <BalanceSummary transactions={transactions} />
@@ -143,7 +143,7 @@ export default function HomePage() {
                 setIsEditModalOpen(true);
             }
         }}>
-          <DialogContent className="sm:max-w-[425px] md:max-w-[600px] no-print">
+          <DialogContent className="sm:max-w-[425px] md:max-w-[600px]"> {/* Removed no-print class */}
             <DialogHeader>
               <DialogTitle>تعديل المعاملة</DialogTitle>
               <DialogDescription>
@@ -160,11 +160,11 @@ export default function HomePage() {
         </Dialog>
       )}
       
-      {/* Printable Report Section - Hidden by default, shown only for print */}
+      {/* Printable Report Section - Removed
       <div className="print-only">
         <PrintableReport transactions={transactions} />
-      </div>
+      </div> 
+      */}
     </div>
   );
 }
-
