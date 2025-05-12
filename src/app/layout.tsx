@@ -4,6 +4,7 @@ import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
 import Logo from '@/components/shared/Logo';
 import { cn } from '@/lib/utils';
+import CurrentYear from '@/components/shared/CurrentYear'; // Import the new component
 
 const geistSans = GeistSans;
 
@@ -19,11 +20,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ar" dir="rtl" suppressHydrationWarning>
-      <body 
+      <body
         className={cn(
-          geistSans.variable, 
+          geistSans.variable,
           "font-sans antialiased"
         )}
+        suppressHydrationWarning={true} // Add suppressHydrationWarning here
       >
         <div className="flex flex-col min-h-screen">
           <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -37,7 +39,7 @@ export default function RootLayout({
           <footer className="py-6 md:px-8 md:py-0 border-t">
             <div className="container flex flex-col items-center justify-center gap-4 md:h-24 md:flex-row">
               <p className="text-sm leading-loose text-center text-muted-foreground">
-                © {new Date().getFullYear()} بوصلة العملات. جميع الحقوق محفوظة.
+                © <CurrentYear /> بوصلة العملات. جميع الحقوق محفوظة.
               </p>
             </div>
           </footer>
