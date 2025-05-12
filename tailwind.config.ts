@@ -19,7 +19,7 @@ export default {
   	extend: {
       fontFamily: {
         sans: ["var(--font-geist-sans)", ...fontFamily.sans],
-        mono: ["var(--font-geist-mono)", ...fontFamily.mono],
+        // mono: ["var(--font-geist-mono)", ...fontFamily.mono], // Removed as geist/font/mono is not imported
       },
   		colors: {
   			background: 'hsl(var(--background))',

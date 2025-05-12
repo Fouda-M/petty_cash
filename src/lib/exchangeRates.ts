@@ -1,4 +1,5 @@
-import type { Currency, ExchangeRates } from '@/types';
+import type { ExchangeRates } from '@/types';
+import { Currency } from '@/lib/constants'; // Import Currency as a value
 
 // Mock exchange rates - in a real app, fetch this from an API
 // Rates are 1 unit of the currency to USD

@@ -1,13 +1,13 @@
 import type { Metadata } from 'next';
 import { GeistSans } from 'geist/font/sans';
-import { GeistMono } from 'geist/font/mono';
+// import { GeistMono } from 'geist/font/mono'; // Removed as it's causing a build error and not explicitly used
 import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
 import Logo from '@/components/shared/Logo'; // Changed path to shared
 import { cn } from '@/lib/utils';
 
 const geistSans = GeistSans; // Directly use the imported object
-const geistMono = GeistMono; // Directly use the imported object
+// const geistMono = GeistMono; // Commented out
 
 export const metadata: Metadata = {
   title: 'Currency Compass',
@@ -24,7 +24,7 @@ export default function RootLayout({
       <body 
         className={cn(
           geistSans.variable, 
-          geistMono.variable, 
+          // geistMono.variable, // Commented out
           "font-sans antialiased" // Use font-sans which maps to --font-geist-sans
         )}
       >
