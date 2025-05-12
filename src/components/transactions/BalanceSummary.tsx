@@ -9,7 +9,7 @@ import { TransactionType } from "@/types";
 import { Currency, CONVERSION_TARGET_CURRENCIES, getCurrencyInfo, CURRENCIES_INFO } from "@/lib/constants";
 import { convertCurrency } from "@/lib/exchangeRates";
 import { cn } from "@/lib/utils";
-import { TrendingUp, TrendingDown, Wallet, Scale, UserCircle2, HandCoins, Receipt, ShoppingCart, ArchiveRestore, Briefcase, Coins, Landmark, Users } from "lucide-react"; // Added Landmark, Users
+import { TrendingUp, TrendingDown, Wallet, Scale, UserCircle2, HandCoins, Receipt, ShoppingCart, ArchiveRestore, Briefcase, Coins, Landmark, Users } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 
 interface BalanceSummaryProps {
@@ -22,6 +22,7 @@ interface TypedTotals {
   custodyHandoverOwner: number;
   custodyHandoverClient: number;
   custodyReturn: number;
+  driverFee: number;
 }
 
 interface NetCompanyCashFlow {
@@ -33,6 +34,8 @@ interface NetCompanyCashFlow {
 interface TripProfitLossDetails {
   revenue: number;
   expense: number;
+  custodyOwner: number;
+  driverFee: number;
   net: number;
 }
 
@@ -43,13 +46,14 @@ interface DriverOutstandingBalance {
   totalRevenue: number;
   totalExpense: number;
   totalReturn: number;
+  totalDriverFee: number;
   netOutstanding: number;
 }
 
 interface DriverRetainedFromRevenue {
     currency: Currency;
     totalRevenueInCurrency: number;
-    totalCustodyHandoverClientInCurrency: number; // Added this
+    totalCustodyHandoverClientInCurrency: number;
     totalCustodyReturnInCurrency: number;
     netRetainedByDriver: number;
     convertedValues: { [targetCurrency in Currency]?: number };
@@ -61,19 +65,20 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
   const totalsByOriginalCurrency = React.useMemo(() => {
     const result: Record<Currency, TypedTotals> = {} as any;
     CURRENCIES_INFO.forEach(c => {
-      result[c.code] = { revenue: 0, expense: 0, custodyHandoverOwner: 0, custodyHandoverClient: 0, custodyReturn: 0 };
+      result[c.code] = { revenue: 0, expense: 0, custodyHandoverOwner: 0, custodyHandoverClient: 0, custodyReturn: 0, driverFee: 0 };
     });
 
     transactions.forEach(t => {
       const type = t.type;
       if (!result[t.currency]) {
-          result[t.currency] = { revenue: 0, expense: 0, custodyHandoverOwner: 0, custodyHandoverClient: 0, custodyReturn: 0 };
+          result[t.currency] = { revenue: 0, expense: 0, custodyHandoverOwner: 0, custodyHandoverClient: 0, custodyReturn: 0, driverFee: 0 };
       }
       if (type === TransactionType.REVENUE) result[t.currency].revenue += t.amount;
       else if (type === TransactionType.EXPENSE) result[t.currency].expense += t.amount;
       else if (type === TransactionType.CUSTODY_HANDOVER_OWNER) result[t.currency].custodyHandoverOwner += t.amount;
       else if (type === TransactionType.CUSTODY_HANDOVER_CLIENT) result[t.currency].custodyHandoverClient += t.amount;
       else if (type === TransactionType.CUSTODY_RETURN) result[t.currency].custodyReturn += t.amount;
+      else if (type === TransactionType.DRIVER_FEE) result[t.currency].driverFee += t.amount;
     });
     return result;
   }, [transactions]);
@@ -85,13 +90,14 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
           expense: 0, 
           custodyHandoverOwner: 0, 
           custodyHandoverClient: 0, 
-          custodyReturn: 0 
+          custodyReturn: 0,
+          driverFee: 0,
       };
       // What driver received and is accountable for: custody from owner + custody from client + revenue collected
-      // What driver spent or returned: expenses + custody returned to company
+      // What driver spent or returned: expenses + custody returned to company + driver fee (if taken from this pool)
       const netOutstanding = 
         (totals.custodyHandoverOwner + totals.custodyHandoverClient + totals.revenue) - 
-        (totals.expense + totals.custodyReturn);
+        (totals.expense + totals.custodyReturn + totals.driverFee);
       
       return {
         currency: currencyInfo.code,
@@ -100,6 +106,7 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
         totalRevenue: totals.revenue,
         totalExpense: totals.expense,
         totalReturn: totals.custodyReturn,
+        totalDriverFee: totals.driverFee,
         netOutstanding: netOutstanding,
       };
     }).filter(b =>
@@ -108,6 +115,7 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
       b.totalRevenue !== 0 ||
       b.totalExpense !== 0 ||
       b.totalReturn !== 0 ||
+      b.totalDriverFee !== 0 ||
       b.netOutstanding !== 0
     );
   }, [totalsByOriginalCurrency]);
@@ -118,11 +126,12 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
           revenue: 0, 
           expense: 0, 
           custodyHandoverOwner: 0, 
-          custodyHandoverClient: 0, // Not directly part of company cash flow at handover
-          custodyReturn: 0 
+          custodyHandoverClient: 0, 
+          custodyReturn: 0,
+          driverFee: 0,
       };
-      // Company cash impact: Revenue + Custody Returned - Expenses - Custody Handed Out (Owner)
-      const netInOriginal = originalTotals.revenue + originalTotals.custodyReturn - originalTotals.expense - originalTotals.custodyHandoverOwner;
+      // Company cash impact: Revenue + Custody Returned - Expenses - Custody Handed Out (Owner) - Driver Fee
+      const netInOriginal = originalTotals.revenue + originalTotals.custodyReturn - originalTotals.expense - originalTotals.custodyHandoverOwner - originalTotals.driverFee;
       
       const convertedValues: { [targetCurrency in Currency]?: number } = {};
       CONVERSION_TARGET_CURRENCIES.forEach(target => {
@@ -148,19 +157,24 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
     CONVERSION_TARGET_CURRENCIES.forEach(targetCurrency => {
       let totalConvertedRevenue = 0;
       let totalConvertedExpenses = 0;
+      let totalConvertedCustodyOwner = 0;
+      let totalConvertedDriverFee = 0;
 
       transactions.forEach(t => {
         const type = t.type;
         const convertedAmount = convertCurrency(t.amount, t.currency, targetCurrency);
         if (type === TransactionType.REVENUE) totalConvertedRevenue += convertedAmount;
         else if (type === TransactionType.EXPENSE) totalConvertedExpenses += convertedAmount;
-        // CUSTODY_HANDOVER_CLIENT and CUSTODY_HANDOVER_OWNER are not direct revenue/expense for P&L
+        else if (type === TransactionType.CUSTODY_HANDOVER_OWNER) totalConvertedCustodyOwner += convertedAmount;
+        else if (type === TransactionType.DRIVER_FEE) totalConvertedDriverFee += convertedAmount;
       });
       
       summary[targetCurrency] = {
         revenue: totalConvertedRevenue,
         expense: totalConvertedExpenses,
-        net: totalConvertedRevenue - totalConvertedExpenses
+        custodyOwner: totalConvertedCustodyOwner,
+        driverFee: totalConvertedDriverFee,
+        net: totalConvertedRevenue - totalConvertedExpenses - totalConvertedCustodyOwner - totalConvertedDriverFee
       };
     });
     return summary;
@@ -173,10 +187,16 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
           expense: 0, 
           custodyHandoverOwner: 0, 
           custodyHandoverClient: 0, 
-          custodyReturn: 0 
+          custodyReturn: 0,
+          driverFee: 0, // Driver fee might be paid from this retained amount
       };
       // Net retained by driver from revenue collected and client advances, after returning some.
+      // If driver fee is paid by driver from this cash pool, it reduces what's "retained" for other purposes or return.
       const netRetained = (totals.revenue + totals.custodyHandoverClient) - totals.custodyReturn;
+      // Note: totals.driverFee is already accounted for if it's a recorded transaction.
+      // The 'netRetained' here is cash flow for driver before *unrecorded* personal expenses.
+      // If DRIVER_FEE transaction means driver paid themselves, it's already an "outflow" for the driver's cash accountability.
+
 
       const convertedValues: { [targetCurrency in Currency]?: number } = {};
       CONVERSION_TARGET_CURRENCIES.forEach(target => {
@@ -251,7 +271,7 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
                 الرصيد المستحق مع السائق
             </h3>
             <CardDescription className="mb-4">
-              تفاصيل المبالغ المسلمة للسائق (من الشركة أو العميل)، الإيرادات المحققة، المصروفات، والمبالغ المرتجعة، وصافي المبلغ المستحق مع السائق حاليًا.
+              تفاصيل المبالغ المسلمة للسائق (من الشركة أو العميل)، الإيرادات المحققة، المصروفات وأجرة السائق، والمبالغ المرتجعة، وصافي المبلغ المستحق مع السائق حاليًا.
             </CardDescription>
             {driverOutstandingBalances.length > 0 ? (
               <div className="overflow-x-auto">
@@ -263,6 +283,7 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
                       <TableHead className="text-end">عهدة (عميل) <Users className="inline h-4 w-4"/></TableHead>
                       <TableHead className="text-end">إجمالي إيراد <Receipt className="inline h-4 w-4"/></TableHead>
                       <TableHead className="text-end">إجمالي مصروف <ShoppingCart className="inline h-4 w-4"/></TableHead>
+                       <TableHead className="text-end">أجرة سائق <HandCoins className="inline h-4 w-4"/></TableHead>
                       <TableHead className="text-end">إجمالي مرتجع <ArchiveRestore className="inline h-4 w-4"/></TableHead>
                       <TableHead className="text-end">صافي مستحق <Briefcase className="inline h-4 w-4"/></TableHead>
                     </TableRow>
@@ -275,6 +296,7 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
                         <TableCell className="text-end">{formatCurrencyDisplay(balance.totalCustodyHandoverClient, balance.currency, false, true)}</TableCell>
                         <TableCell className="text-end">{formatCurrencyDisplay(balance.totalRevenue, balance.currency, false, true)}</TableCell>
                         <TableCell className="text-end">{formatCurrencyDisplay(balance.totalExpense, balance.currency, false, true)}</TableCell>
+                        <TableCell className="text-end">{formatCurrencyDisplay(balance.totalDriverFee, balance.currency, false, true)}</TableCell>
                         <TableCell className="text-end">{formatCurrencyDisplay(balance.totalReturn, balance.currency, false, true)}</TableCell>
                         <TableCell className="text-end">{formatCurrencyDisplay(balance.netOutstanding, balance.currency, true)}</TableCell>
                       </TableRow>
@@ -296,7 +318,7 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
                 صافي الأرصدة (التأثير على خزنة الشركة)
             </h3>
             <CardDescription className="mb-4">
-              نظرة عامة على صافي التغير في أرصدة الشركة (إيرادات + عهد مرتجعة - مصروفات - عهد مسلمة من المالك) بعملات مختلفة. عهد العملاء لا تؤثر مباشرة هنا.
+              نظرة عامة على صافي التغير في أرصدة الشركة (إيرادات + عهد مرتجعة - مصروفات - عهد مسلمة من المالك - أجرة السائق) بعملات مختلفة.
             </CardDescription>
             {netCompanyCashFlows.length > 0 ? (
               <div className="overflow-x-auto">
@@ -345,7 +367,7 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
                 ملخص ربحية الرحلات (معادل)
             </h3>
             <CardDescription className="mb-4">
-                تحليل إجمالي الإيرادات والمصروفات المحولة لعملات رئيسية لتحديد ربحية الرحلات.
+                تحليل إجمالي الإيرادات، المصروفات، العهد المسلمة من المالك، وأجرة السائق المحولة لعملات رئيسية لتحديد ربحية الرحلات.
             </CardDescription>
             <div className="space-y-4">
                 {CONVERSION_TARGET_CURRENCIES.map(targetCurrency => {
@@ -359,12 +381,20 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
                             </h4>
                             <div className="space-y-1.5 text-sm">
                                 <div className="flex justify-between items-center">
-                                    <span>إجمالي الإيرادات (رحلات):</span>
+                                    <span><Receipt className="inline h-4 w-4 me-1 text-primary"/>إجمالي الإيرادات (رحلات):</span>
                                     {formatCurrencyDisplay(details.revenue, targetCurrency, false)}
                                 </div>
                                 <div className="flex justify-between items-center">
-                                    <span>إجمالي المصروفات (رحلات):</span>
+                                    <span><ShoppingCart className="inline h-4 w-4 me-1 text-primary"/>إجمالي المصروفات (رحلات):</span>
                                     {formatCurrencyDisplay(details.expense, targetCurrency, false)}
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span><Landmark className="inline h-4 w-4 me-1 text-primary"/>اجمالى العهد (مسلمة من المالك):</span>
+                                    {formatCurrencyDisplay(details.custodyOwner, targetCurrency, false)}
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span><HandCoins className="inline h-4 w-4 me-1 text-primary"/>اجرة السائق:</span>
+                                    {formatCurrencyDisplay(details.driverFee, targetCurrency, false)}
                                 </div>
                                 <Separator className="my-2" />
                                 <div className="flex justify-between items-center text-base">

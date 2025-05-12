@@ -6,6 +6,7 @@ export enum TransactionType {
   CUSTODY_HANDOVER_OWNER = 'CUSTODY_HANDOVER_OWNER', // Custody given by the company/owner to the driver
   CUSTODY_HANDOVER_CLIENT = 'CUSTODY_HANDOVER_CLIENT', // Custody/advance payment received by the driver from the client
   CUSTODY_RETURN = 'CUSTODY_RETURN', // Money returned by driver to the company
+  DRIVER_FEE = 'DRIVER_FEE', // Driver's fee for the trip
 }
 
 export interface Transaction {

@@ -43,6 +43,7 @@ export const TRANSACTION_TYPES_INFO: TransactionTypeInfo[] = [
   { type: TxType.CUSTODY_HANDOVER_OWNER, name: 'عهدة مسلمة (صاحب السيارة)', descriptionPlaceholder: 'مثال: عهدة بداية الوردية من المكتب' },
   { type: TxType.CUSTODY_HANDOVER_CLIENT, name: 'عهدة مسلمة (العميل)', descriptionPlaceholder: 'مثال: مبلغ مدفوع مقدماً من العميل للسائق' },
   { type: TxType.CUSTODY_RETURN, name: 'إرجاع عهدة/إيراد', descriptionPlaceholder: 'مثال: المبلغ المتبقي المُرجع من السائق للشركة' },
+  { type: TxType.DRIVER_FEE, name: 'أجرة السائق', descriptionPlaceholder: 'مثال: أجرة السائق عن الرحلة' },
 ];
 
 export const getTransactionTypeInfo = (transactionType: TxType): TransactionTypeInfo | undefined => {
