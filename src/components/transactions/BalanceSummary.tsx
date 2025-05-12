@@ -9,7 +9,7 @@ import { TransactionType } from "@/types";
 import { Currency, CONVERSION_TARGET_CURRENCIES, getCurrencyInfo, CURRENCIES_INFO } from "@/lib/constants";
 import { convertCurrency } from "@/lib/exchangeRates";
 import { cn } from "@/lib/utils";
-import { TrendingUp, TrendingDown, Wallet, Scale, UserCircle2, HandCoins, Receipt, ShoppingCart, ArchiveRestore, Briefcase, UserX, Undo2, Pocket, Coins } from "lucide-react";
+import { TrendingUp, TrendingDown, Wallet, Scale, UserCircle2, HandCoins, Receipt, ShoppingCart, ArchiveRestore, Briefcase, Coins, Landmark, Users } from "lucide-react"; // Added Landmark, Users
 import { Separator } from "@/components/ui/separator";
 
 interface BalanceSummaryProps {
@@ -19,7 +19,8 @@ interface BalanceSummaryProps {
 interface TypedTotals {
   revenue: number;
   expense: number;
-  custodyHandover: number;
+  custodyHandoverOwner: number;
+  custodyHandoverClient: number;
   custodyReturn: number;
 }
 
@@ -37,7 +38,8 @@ interface TripProfitLossDetails {
 
 interface DriverOutstandingBalance {
   currency: Currency;
-  totalHandover: number;
+  totalCustodyHandoverOwner: number;
+  totalCustodyHandoverClient: number;
   totalRevenue: number;
   totalExpense: number;
   totalReturn: number;
@@ -47,6 +49,7 @@ interface DriverOutstandingBalance {
 interface DriverRetainedFromRevenue {
     currency: Currency;
     totalRevenueInCurrency: number;
+    totalCustodyHandoverClientInCurrency: number; // Added this
     totalCustodyReturnInCurrency: number;
     netRetainedByDriver: number;
     convertedValues: { [targetCurrency in Currency]?: number };
@@ -58,17 +61,18 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
   const totalsByOriginalCurrency = React.useMemo(() => {
     const result: Record<Currency, TypedTotals> = {} as any;
     CURRENCIES_INFO.forEach(c => {
-      result[c.code] = { revenue: 0, expense: 0, custodyHandover: 0, custodyReturn: 0 };
+      result[c.code] = { revenue: 0, expense: 0, custodyHandoverOwner: 0, custodyHandoverClient: 0, custodyReturn: 0 };
     });
 
     transactions.forEach(t => {
-      const type = t.type || TransactionType.EXPENSE; 
-      if (!result[t.currency]) { 
-          result[t.currency] = { revenue: 0, expense: 0, custodyHandover: 0, custodyReturn: 0 };
+      const type = t.type;
+      if (!result[t.currency]) {
+          result[t.currency] = { revenue: 0, expense: 0, custodyHandoverOwner: 0, custodyHandoverClient: 0, custodyReturn: 0 };
       }
       if (type === TransactionType.REVENUE) result[t.currency].revenue += t.amount;
       else if (type === TransactionType.EXPENSE) result[t.currency].expense += t.amount;
-      else if (type === TransactionType.CUSTODY_HANDOVER) result[t.currency].custodyHandover += t.amount;
+      else if (type === TransactionType.CUSTODY_HANDOVER_OWNER) result[t.currency].custodyHandoverOwner += t.amount;
+      else if (type === TransactionType.CUSTODY_HANDOVER_CLIENT) result[t.currency].custodyHandoverClient += t.amount;
       else if (type === TransactionType.CUSTODY_RETURN) result[t.currency].custodyReturn += t.amount;
     });
     return result;
@@ -76,18 +80,31 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
 
   const driverOutstandingBalances = React.useMemo((): DriverOutstandingBalance[] => {
     return CURRENCIES_INFO.map(currencyInfo => {
-      const totals = totalsByOriginalCurrency[currencyInfo.code] || { revenue: 0, expense: 0, custodyHandover: 0, custodyReturn: 0 };
-      const netOutstanding = totals.custodyHandover + totals.revenue - totals.expense - totals.custodyReturn;
+      const totals = totalsByOriginalCurrency[currencyInfo.code] || { 
+          revenue: 0, 
+          expense: 0, 
+          custodyHandoverOwner: 0, 
+          custodyHandoverClient: 0, 
+          custodyReturn: 0 
+      };
+      // What driver received and is accountable for: custody from owner + custody from client + revenue collected
+      // What driver spent or returned: expenses + custody returned to company
+      const netOutstanding = 
+        (totals.custodyHandoverOwner + totals.custodyHandoverClient + totals.revenue) - 
+        (totals.expense + totals.custodyReturn);
+      
       return {
         currency: currencyInfo.code,
-        totalHandover: totals.custodyHandover,
+        totalCustodyHandoverOwner: totals.custodyHandoverOwner,
+        totalCustodyHandoverClient: totals.custodyHandoverClient,
         totalRevenue: totals.revenue,
         totalExpense: totals.expense,
         totalReturn: totals.custodyReturn,
         netOutstanding: netOutstanding,
       };
     }).filter(b =>
-      b.totalHandover !== 0 ||
+      b.totalCustodyHandoverOwner !== 0 ||
+      b.totalCustodyHandoverClient !== 0 ||
       b.totalRevenue !== 0 ||
       b.totalExpense !== 0 ||
       b.totalReturn !== 0 ||
@@ -97,8 +114,15 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
 
   const netCompanyCashFlows = React.useMemo((): NetCompanyCashFlow[] => {
     return CURRENCIES_INFO.map(currencyInfo => {
-      const originalTotals = totalsByOriginalCurrency[currencyInfo.code] || { revenue: 0, expense: 0, custodyHandover: 0, custodyReturn: 0 };
-      const netInOriginal = originalTotals.revenue + originalTotals.custodyReturn - originalTotals.expense - originalTotals.custodyHandover;
+      const originalTotals = totalsByOriginalCurrency[currencyInfo.code] || { 
+          revenue: 0, 
+          expense: 0, 
+          custodyHandoverOwner: 0, 
+          custodyHandoverClient: 0, // Not directly part of company cash flow at handover
+          custodyReturn: 0 
+      };
+      // Company cash impact: Revenue + Custody Returned - Expenses - Custody Handed Out (Owner)
+      const netInOriginal = originalTotals.revenue + originalTotals.custodyReturn - originalTotals.expense - originalTotals.custodyHandoverOwner;
       
       const convertedValues: { [targetCurrency in Currency]?: number } = {};
       CONVERSION_TARGET_CURRENCIES.forEach(target => {
@@ -126,10 +150,11 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
       let totalConvertedExpenses = 0;
 
       transactions.forEach(t => {
-        const type = t.type || TransactionType.EXPENSE;
+        const type = t.type;
         const convertedAmount = convertCurrency(t.amount, t.currency, targetCurrency);
         if (type === TransactionType.REVENUE) totalConvertedRevenue += convertedAmount;
         else if (type === TransactionType.EXPENSE) totalConvertedExpenses += convertedAmount;
+        // CUSTODY_HANDOVER_CLIENT and CUSTODY_HANDOVER_OWNER are not direct revenue/expense for P&L
       });
       
       summary[targetCurrency] = {
@@ -143,8 +168,15 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
 
   const driverRetainedFromRevenueSummary = React.useMemo((): DriverRetainedFromRevenue[] => {
     return CURRENCIES_INFO.map(currencyInfo => {
-      const totals = totalsByOriginalCurrency[currencyInfo.code] || { revenue: 0, expense: 0, custodyHandover: 0, custodyReturn: 0 };
-      const netRetained = totals.revenue - totals.custodyReturn;
+      const totals = totalsByOriginalCurrency[currencyInfo.code] || { 
+          revenue: 0, 
+          expense: 0, 
+          custodyHandoverOwner: 0, 
+          custodyHandoverClient: 0, 
+          custodyReturn: 0 
+      };
+      // Net retained by driver from revenue collected and client advances, after returning some.
+      const netRetained = (totals.revenue + totals.custodyHandoverClient) - totals.custodyReturn;
 
       const convertedValues: { [targetCurrency in Currency]?: number } = {};
       CONVERSION_TARGET_CURRENCIES.forEach(target => {
@@ -156,11 +188,17 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
       return {
         currency: currencyInfo.code,
         totalRevenueInCurrency: totals.revenue,
+        totalCustodyHandoverClientInCurrency: totals.custodyHandoverClient,
         totalCustodyReturnInCurrency: totals.custodyReturn,
         netRetainedByDriver: netRetained,
         convertedValues,
       };
-    }).filter(s => s.totalRevenueInCurrency !== 0 || s.totalCustodyReturnInCurrency !== 0 || s.netRetainedByDriver !== 0);
+    }).filter(s => 
+        s.totalRevenueInCurrency !== 0 || 
+        s.totalCustodyHandoverClientInCurrency !== 0 || 
+        s.totalCustodyReturnInCurrency !== 0 || 
+        s.netRetainedByDriver !== 0
+    );
   }, [totalsByOriginalCurrency]);
 
 
@@ -213,7 +251,7 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
                 الرصيد المستحق مع السائق
             </h3>
             <CardDescription className="mb-4">
-              تفاصيل المبالغ المسلمة للسائق، الإيرادات المحققة، المصروفات، والمبالغ المرتجعة، وصافي المبلغ المستحق مع السائق حاليًا.
+              تفاصيل المبالغ المسلمة للسائق (من الشركة أو العميل)، الإيرادات المحققة، المصروفات، والمبالغ المرتجعة، وصافي المبلغ المستحق مع السائق حاليًا.
             </CardDescription>
             {driverOutstandingBalances.length > 0 ? (
               <div className="overflow-x-auto">
@@ -221,7 +259,8 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
                   <TableHeader>
                     <TableRow>
                       <TableHead className="text-start">العملة</TableHead>
-                      <TableHead className="text-end">إجمالي مسلم <HandCoins className="inline h-4 w-4"/></TableHead>
+                      <TableHead className="text-end">عهدة (مالك) <Landmark className="inline h-4 w-4"/></TableHead>
+                      <TableHead className="text-end">عهدة (عميل) <Users className="inline h-4 w-4"/></TableHead>
                       <TableHead className="text-end">إجمالي إيراد <Receipt className="inline h-4 w-4"/></TableHead>
                       <TableHead className="text-end">إجمالي مصروف <ShoppingCart className="inline h-4 w-4"/></TableHead>
                       <TableHead className="text-end">إجمالي مرتجع <ArchiveRestore className="inline h-4 w-4"/></TableHead>
@@ -232,7 +271,8 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
                     {driverOutstandingBalances.map((balance) => (
                       <TableRow key={`outstanding-${balance.currency}`}>
                         <TableCell className="font-medium text-start">{getCurrencyInfo(balance.currency)?.name || balance.currency}</TableCell>
-                        <TableCell className="text-end">{formatCurrencyDisplay(balance.totalHandover, balance.currency, false, true)}</TableCell>
+                        <TableCell className="text-end">{formatCurrencyDisplay(balance.totalCustodyHandoverOwner, balance.currency, false, true)}</TableCell>
+                        <TableCell className="text-end">{formatCurrencyDisplay(balance.totalCustodyHandoverClient, balance.currency, false, true)}</TableCell>
                         <TableCell className="text-end">{formatCurrencyDisplay(balance.totalRevenue, balance.currency, false, true)}</TableCell>
                         <TableCell className="text-end">{formatCurrencyDisplay(balance.totalExpense, balance.currency, false, true)}</TableCell>
                         <TableCell className="text-end">{formatCurrencyDisplay(balance.totalReturn, balance.currency, false, true)}</TableCell>
@@ -256,7 +296,7 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
                 صافي الأرصدة (التأثير على خزنة الشركة)
             </h3>
             <CardDescription className="mb-4">
-              نظرة عامة على صافي التغير في أرصدة الشركة (إيرادات + عهد مرتجعة - مصروفات - عهد مسلمة) بعملات مختلفة.
+              نظرة عامة على صافي التغير في أرصدة الشركة (إيرادات + عهد مرتجعة - مصروفات - عهد مسلمة من المالك) بعملات مختلفة. عهد العملاء لا تؤثر مباشرة هنا.
             </CardDescription>
             {netCompanyCashFlows.length > 0 ? (
               <div className="overflow-x-auto">
@@ -319,11 +359,11 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
                             </h4>
                             <div className="space-y-1.5 text-sm">
                                 <div className="flex justify-between items-center">
-                                    <span>إجمالي الإيرادات:</span>
+                                    <span>إجمالي الإيرادات (رحلات):</span>
                                     {formatCurrencyDisplay(details.revenue, targetCurrency, false)}
                                 </div>
                                 <div className="flex justify-between items-center">
-                                    <span>إجمالي المصروفات:</span>
+                                    <span>إجمالي المصروفات (رحلات):</span>
                                     {formatCurrencyDisplay(details.expense, targetCurrency, false)}
                                 </div>
                                 <Separator className="my-2" />
@@ -344,10 +384,10 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
         <div>
             <h3 className="text-xl font-semibold mb-3 flex items-center">
                 <Coins className="ms-2 h-6 w-6 text-primary" />
-                تحليل إيرادات السائق والمبالغ المحتجزة
+                تحليل المبالغ المحتجزة بواسطة السائق
             </h3>
             <CardDescription className="mb-4">
-                تفصيل الإيرادات التي جمعها السائق، المبالغ التي أعادها منها، والمبلغ الصافي الذي احتفظ به السائق من هذه الإيرادات (والذي قد يشمل مصروفاته الشخصية غير المغطاة من الشركة).
+                تفصيل الإيرادات وعهد العملاء التي جمعها السائق، المبالغ التي أعادها منها، والمبلغ الصافي الذي احتفظ به (والذي قد يشمل مصروفاته الشخصية غير المغطاة من الشركة).
             </CardDescription>
             {driverRetainedFromRevenueSummary.length > 0 ? (
               <div className="overflow-x-auto">
@@ -355,9 +395,10 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
                   <TableHeader>
                     <TableRow>
                       <TableHead className="text-start">العملة</TableHead>
-                      <TableHead className="text-end">إجمالي الإيرادات <TrendingUp className="inline h-4 w-4"/></TableHead>
-                      <TableHead className="text-end">المرتجع من الإيرادات <Undo2 className="inline h-4 w-4"/></TableHead>
-                      <TableHead className="text-end">صافي محتجز للسائق <Pocket className="inline h-4 w-4"/></TableHead>
+                      <TableHead className="text-end">إجمالي إيرادات <TrendingUp className="inline h-4 w-4"/></TableHead>
+                      <TableHead className="text-end">عهدة (عميل) <Users className="inline h-4 w-4"/></TableHead>
+                      <TableHead className="text-end">المرتجع للشركة <ArchiveRestore className="inline h-4 w-4"/></TableHead>
+                      <TableHead className="text-end">صافي محتجز للسائق <UserCircle2 className="inline h-4 w-4"/></TableHead>
                        {CONVERSION_TARGET_CURRENCIES.map((target) => (
                         <TableHead key={`retained-${target}`} className="text-end hidden sm:table-cell">
                           صافي السائق بالـ {getCurrencyInfo(target)?.name || target}
@@ -370,6 +411,7 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
                       <TableRow key={`retained-summary-${summary.currency}`}>
                         <TableCell className="font-medium text-start">{getCurrencyInfo(summary.currency)?.name || summary.currency}</TableCell>
                         <TableCell className="text-end">{formatCurrencyDisplay(summary.totalRevenueInCurrency, summary.currency, false, true)}</TableCell>
+                        <TableCell className="text-end">{formatCurrencyDisplay(summary.totalCustodyHandoverClientInCurrency, summary.currency, false, true)}</TableCell>
                         <TableCell className="text-end">{formatCurrencyDisplay(summary.totalCustodyReturnInCurrency, summary.currency, false, true)}</TableCell>
                         <TableCell className="text-end">{formatCurrencyDisplay(summary.netRetainedByDriver, summary.currency, true)}</TableCell>
                         {CONVERSION_TARGET_CURRENCIES.map((target) => (

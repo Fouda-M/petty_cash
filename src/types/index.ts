@@ -3,8 +3,9 @@ import type { Currency } from '@/lib/constants';
 export enum TransactionType {
   EXPENSE = 'EXPENSE',
   REVENUE = 'REVENUE',
-  CUSTODY_HANDOVER = 'CUSTODY_HANDOVER',
-  CUSTODY_RETURN = 'CUSTODY_RETURN', // Money returned by driver
+  CUSTODY_HANDOVER_OWNER = 'CUSTODY_HANDOVER_OWNER', // Custody given by the company/owner to the driver
+  CUSTODY_HANDOVER_CLIENT = 'CUSTODY_HANDOVER_CLIENT', // Custody/advance payment received by the driver from the client
+  CUSTODY_RETURN = 'CUSTODY_RETURN', // Money returned by driver to the company
 }
 
 export interface Transaction {
@@ -18,6 +19,5 @@ export interface Transaction {
 
 export type ExchangeRates = {
   // Rates relative to USD
-  [key in Currency]?: number; 
+  [key in Currency]?: number;
 };
-

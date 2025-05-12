@@ -40,8 +40,9 @@ export interface TransactionTypeInfo {
 export const TRANSACTION_TYPES_INFO: TransactionTypeInfo[] = [
   { type: TxType.EXPENSE, name: 'مصروف', descriptionPlaceholder: 'مثال: وقود, صيانة' },
   { type: TxType.REVENUE, name: 'إيراد رحلة', descriptionPlaceholder: 'مثال: إيراد توصيلة ركاب' },
-  { type: TxType.CUSTODY_HANDOVER, name: 'تسليم عهدة', descriptionPlaceholder: 'مثال: عهدة بداية الوردية للسائق' },
-  { type: TxType.CUSTODY_RETURN, name: 'إرجاع عهدة', descriptionPlaceholder: 'مثال: المبلغ المتبقي المُرجع من السائق' },
+  { type: TxType.CUSTODY_HANDOVER_OWNER, name: 'عهدة مسلمة (صاحب السيارة)', descriptionPlaceholder: 'مثال: عهدة بداية الوردية من المكتب' },
+  { type: TxType.CUSTODY_HANDOVER_CLIENT, name: 'عهدة مسلمة (العميل)', descriptionPlaceholder: 'مثال: مبلغ مدفوع مقدماً من العميل للسائق' },
+  { type: TxType.CUSTODY_RETURN, name: 'إرجاع عهدة/إيراد', descriptionPlaceholder: 'مثال: المبلغ المتبقي المُرجع من السائق للشركة' },
 ];
 
 export const getTransactionTypeInfo = (transactionType: TxType): TransactionTypeInfo | undefined => {

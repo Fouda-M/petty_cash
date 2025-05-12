@@ -31,10 +31,24 @@ export default function HomePage() {
         const parsedTransactions = JSON.parse(savedTransactions, (key, value) => {
           if (key === 'date') return new Date(value);
           return value;
-        }).map((t: Omit<Transaction, 'type'> & { type?: TransactionType }) => ({ 
-          ...t,
-          type: t.type || TransactionType.EXPENSE, 
-        }));
+        }).map((t: any) => { // Use any for broader compatibility with old structure
+          let type = t.type;
+          // Migration for old CUSTODY_HANDOVER type
+          if (type === 'CUSTODY_HANDOVER') { 
+            // Default migration: assume old handovers were from owner
+            type = TransactionType.CUSTODY_HANDOVER_OWNER; 
+          } else if (!Object.values(TransactionType).includes(type as TransactionType)) {
+            // If type is invalid or missing from current enum, default to EXPENSE
+            type = TransactionType.EXPENSE;
+          }
+          return { 
+            ...t,
+            id: t.id || crypto.randomUUID(), // Ensure ID exists
+            date: new Date(t.date), // Ensure date is a Date object
+            type: type as TransactionType, // Cast to TransactionType
+            amount: Number(t.amount) || 0, // Ensure amount is a number
+          };
+        });
         setTransactions(
           parsedTransactions.sort((a: Transaction, b: Transaction) => 
             new Date(b.date).getTime() - new Date(a.date).getTime()
@@ -45,10 +59,15 @@ export default function HomePage() {
       }
     } catch (error) {
       console.error("Failed to load transactions from localStorage:", error);
+      toast({
+        variant: "destructive",
+        title: "خطأ في تحميل المعاملات",
+        description: "لم يتم تحميل المعاملات المحفوظة. قد تكون البيانات تالفة.",
+      });
       setTransactions([]); 
     }
     setIsLoading(false); 
-  }, []); 
+  }, [toast]); // Added toast to dependency array as it's used in catch
 
   React.useEffect(() => {
     if (!isLoading) { 
