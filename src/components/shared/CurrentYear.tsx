@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -10,11 +11,11 @@ export default function CurrentYear() {
   }, []);
 
   if (year === null) {
-    // Return a placeholder or null during server render / pre-hydration.
-    // For a static year, it might be acceptable to show nothing briefly.
-    // Using current year as a fallback during CSR loading phase, or you can use a spinner/dots.
-    return <>{new Date().getFullYear()}</>; 
+    // Return null or a non-dynamic placeholder until client-side effect runs and sets the year.
+    // This ensures server-rendered output (or initial client render before effect) is consistent.
+    return null;
   }
 
   return <>{year}</>;
 }
+

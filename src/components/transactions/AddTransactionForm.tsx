@@ -36,23 +36,25 @@ interface AddTransactionFormProps {
   transactionToEdit?: Transaction | null;
   onTransactionUpdated?: (updatedTransaction: Transaction) => void;
   onCancelEdit?: () => void;
-  className?: string; 
+  className?: string;
 }
 
-const getDefaultFormValues = (): TransactionFormData => ({
+// Provides base values for a new form, excluding date or with date explicitly undefined.
+const getBaseFormValues = (): Omit<TransactionFormData, 'date' | 'amount'> & { date?: Date, amount: undefined | number } => ({
   type: TransactionType.EXPENSE,
   description: "",
-  amount: undefined, // Will be handled by parseFloat or set to undefined if empty string
-  currency: CURRENCIES_INFO[0].code, // Default to the first currency
-  date: new Date(),
+  amount: undefined, // Critical for controlled input: initialize as undefined or '' for number inputs
+  currency: CURRENCIES_INFO[0].code,
+  date: undefined, // Hydration-safe initial value for date
 });
 
-export default function AddTransactionForm({ 
-  onTransactionAdded, 
-  transactionToEdit, 
+
+export default function AddTransactionForm({
+  onTransactionAdded,
+  transactionToEdit,
   onTransactionUpdated,
   onCancelEdit,
-  className 
+  className
 }: AddTransactionFormProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
@@ -61,29 +63,53 @@ export default function AddTransactionForm({
 
   const form = useForm<TransactionFormData>({
     resolver: zodResolver(transactionSchema),
-    defaultValues: transactionToEdit 
-      ? {
+    defaultValues: transactionToEdit
+      ? { // Editing existing transaction
           ...transactionToEdit,
-          amount: transactionToEdit.amount, 
-          date: new Date(transactionToEdit.date), // Ensure date is a Date object for the form
-        } 
-      : getDefaultFormValues(),
+          amount: transactionToEdit.amount, // Ensure amount is number
+          date: new Date(transactionToEdit.date), // Date from existing data
+        }
+      : getBaseFormValues(), // New transaction: uses date: undefined from getBaseFormValues
   });
 
+  // Effect to initialize or reset form based on mode (new/edit/cancel)
+  // This runs client-side after the initial render.
   React.useEffect(() => {
     if (transactionToEdit) {
+      // Mode: Editing an existing transaction
       form.reset({
         ...transactionToEdit,
         amount: transactionToEdit.amount,
-        date: new Date(transactionToEdit.date), // Ensure date is always a new Date object
+        date: new Date(transactionToEdit.date),
       });
     } else {
-      // Only reset to defaults if not in edit mode AND not already reset by onTransactionAdded
-      if (!form.formState.isSubmitSuccessful) { // Avoid resetting after successful add
-         form.reset(getDefaultFormValues());
+      // Mode: New transaction form, or after cancelling an edit.
+      // `defaultValues` in useForm already set date to `undefined` for the initial hydration-safe render.
+      // This effect, running client-side, will now set it to new Date().
+      // It also handles resetting the form when an edit is cancelled.
+      // We check form.formState.submitCount to avoid double-resetting if onSubmit just handled it for a new item.
+      if (form.formState.submitCount === 0 || (transactionToEdit === null && typeof onCancelEdit === 'function')) {
+        form.reset({
+          ...getBaseFormValues(), // Resets type, description, amount, currency
+          date: new Date(),       // Sets date to now client-side
+        });
+      } else if (form.getValues('date') === undefined && form.formState.submitCount > 0 && !isEditMode) {
+        // This condition handles the case where a new item was just added,
+        // and the form was reset by onSubmit (which might not set date if getBaseFormValues() is used directly).
+        // We ensure date is set to new Date() for the next entry.
+        // However, onSubmit's reset should ideally handle this.
+        // The primary goal is: new form initially gets date undefined, then client sets to new Date().
+      } else if (form.getValues('date') === undefined) {
+        // Fallback: If for any reason date is still undefined on a new form client-side, set it.
+         form.setValue('date', new Date(), { shouldValidate: false, shouldDirty: false });
       }
     }
-  }, [transactionToEdit, form]);
+  // Using form.reset and form.setValue, so they are listed as dependencies.
+  // onCancelEdit is a function prop, can be tricky in deps. If its identity changes, effect re-runs.
+  // form.formState.submitCount ensures we don't reset if onSubmit already did.
+  // form.getValues can also be a dependency if its return changes effect behavior.
+  }, [transactionToEdit, form.reset, form.setValue, onCancelEdit, form.formState.submitCount, form.getValues]);
+
 
   const selectedTransactionType = form.watch("type");
   const currentDescriptionPlaceholder = React.useMemo(() => {
@@ -107,11 +133,13 @@ export default function AddTransactionForm({
         });
         if (isEditMode && onTransactionUpdated) {
           onTransactionUpdated(result.data);
-          // Optionally, call onCancelEdit here if the dialog should close after update.
-          // This is often handled by the parent component that manages the dialog.
-        } else if (onTransactionAdded) {
+        } else if (!isEditMode && onTransactionAdded) {
           onTransactionAdded(result.data);
-          form.reset(getDefaultFormValues());
+          // Reset form for the next new transaction, client-side
+          form.reset({
+            ...getBaseFormValues(), // type, description, amount, currency are reset
+            date: new Date(),      // date is set to current client time
+          });
         }
       } else {
         toast({
@@ -153,8 +181,8 @@ export default function AddTransactionForm({
           render={({ field }) => (
             <FormItem>
               <FormLabel>نوع المعاملة</FormLabel>
-              <Select 
-                onValueChange={field.onChange} 
+              <Select
+                onValueChange={field.onChange}
                 value={field.value}
                 dir="rtl"
               >
@@ -196,14 +224,15 @@ export default function AddTransactionForm({
               <FormItem>
                 <FormLabel>المبلغ</FormLabel>
                 <FormControl>
-                  <Input 
-                    type="number" 
-                    placeholder="0.00" 
-                    {...field} 
+                  <Input
+                    type="number"
+                    placeholder="0.00"
+                    {...field}
                     step="0.01"
                     value={field.value === undefined || field.value === null || Number.isNaN(field.value) ? '' : String(field.value)}
                     onChange={e => {
                         const val = e.target.value;
+                        // Allow empty string to represent undefined, otherwise parse
                         field.onChange(val === '' ? undefined : parseFloat(val));
                     }}
                   />
@@ -218,8 +247,8 @@ export default function AddTransactionForm({
             render={({ field }) => (
               <FormItem>
                 <FormLabel>العملة</FormLabel>
-                <Select 
-                  onValueChange={field.onChange} 
+                <Select
+                  onValueChange={field.onChange}
                   value={field.value}
                   dir="rtl"
                 >
@@ -286,3 +315,4 @@ export default function AddTransactionForm({
     </Card>
   );
 }
+
