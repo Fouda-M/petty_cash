@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from "react";
@@ -30,18 +31,21 @@ interface NetCompanyCashFlow {
   convertedValues: { [targetCurrency in Currency]?: number };
 }
 
-interface RevenueDetail {
+interface TransactionDetail {
   originalCurrency: Currency;
   originalAmount: number;
   convertedAmount: number; // to the target currency of the summary section
 }
 
 interface TripProfitLossDetails {
-  revenue: number; // Total converted revenue
-  revenueDetails: RevenueDetail[]; // Breakdown of revenue
+  revenue: number; 
+  revenueDetails: TransactionDetail[];
   expense: number;
+  expenseDetails: TransactionDetail[];
   custodyOwner: number;
+  custodyOwnerDetails: TransactionDetail[];
   driverFee: number;
+  driverFeeDetails: TransactionDetail[]; // Added for consistency, though not explicitly requested for display yet
   net: number;
 }
 
@@ -99,8 +103,6 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
           custodyReturn: 0,
           driverFee: 0,
       };
-      // What driver received and is accountable for: custody from owner + custody from client + revenue collected
-      // What driver spent or returned: expenses + custody returned to company + driver fee (if taken from this pool)
       const netOutstanding = 
         (totals.custodyHandoverOwner + totals.custodyHandoverClient + totals.revenue) - 
         (totals.expense + totals.custodyReturn + totals.driverFee);
@@ -136,7 +138,6 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
           custodyReturn: 0,
           driverFee: 0,
       };
-      // Company cash impact: Revenue + Custody Returned - Expenses - Custody Handed Out (Owner) - Driver Fee
       const netInOriginal = originalTotals.revenue + originalTotals.custodyReturn - originalTotals.expense - originalTotals.custodyHandoverOwner - originalTotals.driverFee;
       
       const convertedValues: { [targetCurrency in Currency]?: number } = {};
@@ -165,30 +166,49 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
       let totalConvertedExpenses = 0;
       let totalConvertedCustodyOwner = 0;
       let totalConvertedDriverFee = 0;
-      const revenueDetailsForTarget: RevenueDetail[] = [];
+      
+      const revenueDetailsForTarget: TransactionDetail[] = [];
+      const expenseDetailsForTarget: TransactionDetail[] = [];
+      const custodyOwnerDetailsForTarget: TransactionDetail[] = [];
+      const driverFeeDetailsForTarget: TransactionDetail[] = [];
+
 
       transactions.forEach(t => {
         const type = t.type;
         const convertedAmount = convertCurrency(t.amount, t.currency, targetCurrency);
+        const detail: TransactionDetail = {
+            originalCurrency: t.currency,
+            originalAmount: t.amount,
+            convertedAmount: convertedAmount,
+        };
+
         if (type === TransactionType.REVENUE) {
             totalConvertedRevenue += convertedAmount;
-            revenueDetailsForTarget.push({
-                originalCurrency: t.currency,
-                originalAmount: t.amount,
-                convertedAmount: convertedAmount,
-            });
+            revenueDetailsForTarget.push(detail);
         }
-        else if (type === TransactionType.EXPENSE) totalConvertedExpenses += convertedAmount;
-        else if (type === TransactionType.CUSTODY_HANDOVER_OWNER) totalConvertedCustodyOwner += convertedAmount;
-        else if (type === TransactionType.DRIVER_FEE) totalConvertedDriverFee += convertedAmount;
+        else if (type === TransactionType.EXPENSE) {
+            totalConvertedExpenses += convertedAmount;
+            expenseDetailsForTarget.push(detail);
+        }
+        else if (type === TransactionType.CUSTODY_HANDOVER_OWNER) {
+            totalConvertedCustodyOwner += convertedAmount;
+            custodyOwnerDetailsForTarget.push(detail);
+        }
+        else if (type === TransactionType.DRIVER_FEE) {
+            totalConvertedDriverFee += convertedAmount;
+            driverFeeDetailsForTarget.push(detail);
+        }
       });
       
       summary[targetCurrency] = {
         revenue: totalConvertedRevenue,
         revenueDetails: revenueDetailsForTarget,
         expense: totalConvertedExpenses,
+        expenseDetails: expenseDetailsForTarget,
         custodyOwner: totalConvertedCustodyOwner,
+        custodyOwnerDetails: custodyOwnerDetailsForTarget,
         driverFee: totalConvertedDriverFee,
+        driverFeeDetails: driverFeeDetailsForTarget,
         net: totalConvertedRevenue - totalConvertedExpenses - totalConvertedCustodyOwner - totalConvertedDriverFee
       };
     });
@@ -242,6 +262,20 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
         {!isNeutral && showTrendIcons && amount < 0 && <TrendingDown className="inline h-4 w-4 ms-1" />}
         {currencyInfo?.symbol || ''}{displayAmount}
       </span>
+    );
+  };
+
+  const renderTransactionDetailBreakdown = (details: TransactionDetail[], targetCurrency: Currency) => {
+    if (details.length === 0) return null;
+    return (
+      <div className="ps-6 pe-2 mt-1 text-xs text-muted-foreground space-y-0.5 border-s border-dashed border-primary/50 ms-2">
+          {details.map((detail, index) => (
+              <div key={index} className="flex justify-between items-center py-0.5">
+                  <span className="whitespace-nowrap">↳ من {getCurrencyInfo(detail.originalCurrency)?.name || detail.originalCurrency}: {formatCurrencyDisplay(detail.originalAmount, detail.originalCurrency, false, true)}</span>
+                  <span className="whitespace-nowrap text-end">(يعادل {formatCurrencyDisplay(detail.convertedAmount, targetCurrency, false, true)})</span>
+              </div>
+          ))}
+      </div>
     );
   };
   
@@ -394,28 +428,27 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
                                     <span><Receipt className="inline h-4 w-4 me-1 text-primary"/>إجمالي الإيرادات (رحلات):</span>
                                     {formatCurrencyDisplay(details.revenue, targetCurrency, false)}
                                 </div>
-                                {details.revenueDetails.length > 0 && (
-                                    <div className="ps-6 pe-2 mt-1 text-xs text-muted-foreground space-y-0.5 border-s border-dashed border-primary/50 ms-2">
-                                        {details.revenueDetails.map((revDetail, index) => (
-                                            <div key={index} className="flex justify-between items-center py-0.5">
-                                                <span className="whitespace-nowrap">↳ من {getCurrencyInfo(revDetail.originalCurrency)?.name || revDetail.originalCurrency}: {formatCurrencyDisplay(revDetail.originalAmount, revDetail.originalCurrency, false, true)}</span>
-                                                <span className="whitespace-nowrap text-end">(يعادل {formatCurrencyDisplay(revDetail.convertedAmount, targetCurrency, false, true)})</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
+                                {renderTransactionDetailBreakdown(details.revenueDetails, targetCurrency)}
+                                
                                 <div className="flex justify-between items-center">
                                     <span><ShoppingCart className="inline h-4 w-4 me-1 text-primary"/>إجمالي المصروفات (رحلات):</span>
                                     {formatCurrencyDisplay(details.expense, targetCurrency, false)}
                                 </div>
+                                {renderTransactionDetailBreakdown(details.expenseDetails, targetCurrency)}
+
                                 <div className="flex justify-between items-center">
                                     <span><Landmark className="inline h-4 w-4 me-1 text-primary"/>اجمالى العهد (مسلمة من المالك):</span>
                                     {formatCurrencyDisplay(details.custodyOwner, targetCurrency, false)}
                                 </div>
+                                {renderTransactionDetailBreakdown(details.custodyOwnerDetails, targetCurrency)}
+                                
                                 <div className="flex justify-between items-center">
                                     <span><HandCoins className="inline h-4 w-4 me-1 text-primary"/>اجرة السائق:</span>
                                     {formatCurrencyDisplay(details.driverFee, targetCurrency, false)}
                                 </div>
+                                {/* Optionally render driverFeeDetails if needed in the future */}
+                                {/* {renderTransactionDetailBreakdown(details.driverFeeDetails, targetCurrency)} */}
+
                                 <Separator className="my-2" />
                                 <div className="flex justify-between items-center text-base">
                                     <span className="font-bold">صافي ربح/خسارة الرحلة:</span>
@@ -484,3 +517,4 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
     </Card>
   );
 }
+
