@@ -281,6 +281,9 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
             } else if (detail.type === TransactionType.REVENUE) {
                 prefix = "↳ إيراد من";
             }
+             else if (detail.type === TransactionType.CUSTODY_HANDOVER_OWNER) {
+                prefix = "↳ عهدة مالك من";
+            }
             return (
               <div key={index} className="flex justify-between items-center py-0.5">
                   <span className="whitespace-nowrap">{prefix} {getCurrencyInfo(detail.originalCurrency)?.name || detail.originalCurrency}: {formatCurrencyDisplay(detail.originalAmount, detail.originalCurrency, false, true)}</span>
@@ -498,9 +501,41 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
                                 {renderAggregatedTransactionDetailBreakdown(details.driverFeeDetails, targetCurrency)}
 
                                 <Separator className="my-2" />
-                                <div className="flex justify-between items-center text-base">
-                                    <span className="font-bold">صافي ربح/خسارة الرحلة:</span>
-                                    {formatCurrencyDisplay(details.net, targetCurrency, true)}
+                                
+                                <div className="space-y-2 pt-2">
+                                    <h5 className="font-semibold text-md text-foreground border-b border-primary/30 pb-1 mb-2">
+                                        تفصيل صافي ربح/خسارة الرحلة:
+                                    </h5>
+
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-muted-foreground">إجمالي الإيرادات والمقبوضات (معادل):</span>
+                                        {formatCurrencyDisplay(details.revenueAndClientCustody, targetCurrency, false, true)}
+                                    </div>
+                                    
+                                    {(() => {
+                                        const totalDeductions = details.expense + details.custodyOwner + details.driverFee;
+                                        const allDeductionDetails = [...details.expenseDetails, ...details.custodyOwnerDetails, ...details.driverFeeDetails];
+                                        
+                                        if (totalDeductions > 0 || allDeductionDetails.length > 0) {
+                                            return (
+                                                <>
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-muted-foreground">إجمالي التكاليف والخصومات (معادل):</span>
+                                                        {formatCurrencyDisplay(totalDeductions, targetCurrency, false, true)}
+                                                    </div>
+                                                    {renderAggregatedTransactionDetailBreakdown(allDeductionDetails, targetCurrency)}
+                                                </>
+                                            );
+                                        }
+                                        return null;
+                                    })()}
+                                    
+                                    <Separator className="my-2 border-dashed" />
+                                    
+                                    <div className="flex justify-between items-center text-base">
+                                        <span className="font-bold">صافي ربح/خسارة الرحلة النهائي:</span>
+                                        {formatCurrencyDisplay(details.net, targetCurrency, true)}
+                                    </div>
                                 </div>
                             </div>
                         </div>
