@@ -1,4 +1,3 @@
-
 "use client";
 
 import * as React from "react";
@@ -31,8 +30,15 @@ interface NetCompanyCashFlow {
   convertedValues: { [targetCurrency in Currency]?: number };
 }
 
+interface RevenueDetail {
+  originalCurrency: Currency;
+  originalAmount: number;
+  convertedAmount: number; // to the target currency of the summary section
+}
+
 interface TripProfitLossDetails {
-  revenue: number;
+  revenue: number; // Total converted revenue
+  revenueDetails: RevenueDetail[]; // Breakdown of revenue
   expense: number;
   custodyOwner: number;
   driverFee: number;
@@ -159,11 +165,19 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
       let totalConvertedExpenses = 0;
       let totalConvertedCustodyOwner = 0;
       let totalConvertedDriverFee = 0;
+      const revenueDetailsForTarget: RevenueDetail[] = [];
 
       transactions.forEach(t => {
         const type = t.type;
         const convertedAmount = convertCurrency(t.amount, t.currency, targetCurrency);
-        if (type === TransactionType.REVENUE) totalConvertedRevenue += convertedAmount;
+        if (type === TransactionType.REVENUE) {
+            totalConvertedRevenue += convertedAmount;
+            revenueDetailsForTarget.push({
+                originalCurrency: t.currency,
+                originalAmount: t.amount,
+                convertedAmount: convertedAmount,
+            });
+        }
         else if (type === TransactionType.EXPENSE) totalConvertedExpenses += convertedAmount;
         else if (type === TransactionType.CUSTODY_HANDOVER_OWNER) totalConvertedCustodyOwner += convertedAmount;
         else if (type === TransactionType.DRIVER_FEE) totalConvertedDriverFee += convertedAmount;
@@ -171,6 +185,7 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
       
       summary[targetCurrency] = {
         revenue: totalConvertedRevenue,
+        revenueDetails: revenueDetailsForTarget,
         expense: totalConvertedExpenses,
         custodyOwner: totalConvertedCustodyOwner,
         driverFee: totalConvertedDriverFee,
@@ -188,16 +203,11 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
           custodyHandoverOwner: 0, 
           custodyHandoverClient: 0, 
           custodyReturn: 0,
-          driverFee: 0, // Driver fee might be paid from this retained amount
+          driverFee: 0, 
       };
-      // Net retained by driver from revenue collected and client advances, after returning some.
-      // If driver fee is paid by driver from this cash pool, it reduces what's "retained" for other purposes or return.
+
       const netRetained = (totals.revenue + totals.custodyHandoverClient) - totals.custodyReturn;
-      // Note: totals.driverFee is already accounted for if it's a recorded transaction.
-      // The 'netRetained' here is cash flow for driver before *unrecorded* personal expenses.
-      // If DRIVER_FEE transaction means driver paid themselves, it's already an "outflow" for the driver's cash accountability.
-
-
+      
       const convertedValues: { [targetCurrency in Currency]?: number } = {};
       CONVERSION_TARGET_CURRENCIES.forEach(target => {
         if (currencyInfo.code !== target) {
@@ -384,6 +394,16 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
                                     <span><Receipt className="inline h-4 w-4 me-1 text-primary"/>إجمالي الإيرادات (رحلات):</span>
                                     {formatCurrencyDisplay(details.revenue, targetCurrency, false)}
                                 </div>
+                                {details.revenueDetails.length > 0 && (
+                                    <div className="ps-6 pe-2 mt-1 text-xs text-muted-foreground space-y-0.5 border-s border-dashed border-primary/50 ms-2">
+                                        {details.revenueDetails.map((revDetail, index) => (
+                                            <div key={index} className="flex justify-between items-center py-0.5">
+                                                <span className="whitespace-nowrap">↳ من {getCurrencyInfo(revDetail.originalCurrency)?.name || revDetail.originalCurrency}: {formatCurrencyDisplay(revDetail.originalAmount, revDetail.originalCurrency, false, true)}</span>
+                                                <span className="whitespace-nowrap text-end">(يعادل {formatCurrencyDisplay(revDetail.convertedAmount, targetCurrency, false, true)})</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
                                 <div className="flex justify-between items-center">
                                     <span><ShoppingCart className="inline h-4 w-4 me-1 text-primary"/>إجمالي المصروفات (رحلات):</span>
                                     {formatCurrencyDisplay(details.expense, targetCurrency, false)}
@@ -410,58 +430,56 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
 
         <Separator />
 
-        {/* Section 4: Driver's Retained Amounts from Revenue (Potential Personal Expenses) */}
+        {/* Section 4: Driver Retained from Revenue Summary */}
         <div>
             <h3 className="text-xl font-semibold mb-3 flex items-center">
                 <Coins className="ms-2 h-6 w-6 text-primary" />
-                تحليل المبالغ المحتجزة بواسطة السائق
+                ملخص المبالغ المحتجزة بواسطة السائق
             </h3>
             <CardDescription className="mb-4">
-                تفصيل الإيرادات وعهد العملاء التي جمعها السائق، المبالغ التي أعادها منها، والمبلغ الصافي الذي احتفظ به (والذي قد يشمل مصروفاته الشخصية غير المغطاة من الشركة).
+                تفاصيل حول الإيرادات والعهد المسلمة للسائق من العميل، والمبالغ المرتجعة، وصافي المبلغ الذي يحتجزه السائق.
             </CardDescription>
             {driverRetainedFromRevenueSummary.length > 0 ? (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="text-start">العملة</TableHead>
-                      <TableHead className="text-end">إجمالي إيرادات <TrendingUp className="inline h-4 w-4"/></TableHead>
-                      <TableHead className="text-end">عهدة (عميل) <Users className="inline h-4 w-4"/></TableHead>
-                      <TableHead className="text-end">المرتجع للشركة <ArchiveRestore className="inline h-4 w-4"/></TableHead>
-                      <TableHead className="text-end">صافي محتجز للسائق <UserCircle2 className="inline h-4 w-4"/></TableHead>
-                       {CONVERSION_TARGET_CURRENCIES.map((target) => (
-                        <TableHead key={`retained-${target}`} className="text-end hidden sm:table-cell">
-                          صافي السائق بالـ {getCurrencyInfo(target)?.name || target}
-                        </TableHead>
-                      ))}
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {driverRetainedFromRevenueSummary.map((summary) => (
-                      <TableRow key={`retained-summary-${summary.currency}`}>
-                        <TableCell className="font-medium text-start">{getCurrencyInfo(summary.currency)?.name || summary.currency}</TableCell>
-                        <TableCell className="text-end">{formatCurrencyDisplay(summary.totalRevenueInCurrency, summary.currency, false, true)}</TableCell>
-                        <TableCell className="text-end">{formatCurrencyDisplay(summary.totalCustodyHandoverClientInCurrency, summary.currency, false, true)}</TableCell>
-                        <TableCell className="text-end">{formatCurrencyDisplay(summary.totalCustodyReturnInCurrency, summary.currency, false, true)}</TableCell>
-                        <TableCell className="text-end">{formatCurrencyDisplay(summary.netRetainedByDriver, summary.currency, true)}</TableCell>
-                        {CONVERSION_TARGET_CURRENCIES.map((target) => (
-                          <TableCell key={`retained-${summary.currency}-${target}`} className="text-end hidden sm:table-cell">
-                            {summary.currency === target 
-                              ? <span className="text-muted-foreground">-</span> 
-                              : formatCurrencyDisplay(summary.convertedValues[target] || 0, target, true)}
-                          </TableCell>
-                        ))}
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+                <div className="overflow-x-auto">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead className="text-start">العملة</TableHead>
+                                <TableHead className="text-end">إجمالي الإيرادات <Receipt className="inline h-4 w-4"/></TableHead>
+                                <TableHead className="text-end">عهدة (عميل) <Users className="inline h-4 w-4"/></TableHead>
+                                <TableHead className="text-end">إجمالي مرتجع <ArchiveRestore className="inline h-4 w-4"/></TableHead>
+                                <TableHead className="text-end">صافي المبلغ المحتجز</TableHead>
+                                {CONVERSION_TARGET_CURRENCIES.map((target) => (
+                                    <TableHead key={target} className="text-end hidden sm:table-cell">
+                                        بالـ {getCurrencyInfo(target)?.name || target}
+                                    </TableHead>
+                                ))}
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {driverRetainedFromRevenueSummary.map((summary) => (
+                                <TableRow key={`retained-${summary.currency}`}>
+                                    <TableCell className="font-medium text-start">{getCurrencyInfo(summary.currency)?.name || summary.currency}</TableCell>
+                                    <TableCell className="text-end">{formatCurrencyDisplay(summary.totalRevenueInCurrency, summary.currency, false, true)}</TableCell>
+                                    <TableCell className="text-end">{formatCurrencyDisplay(summary.totalCustodyHandoverClientInCurrency, summary.currency, false, true)}</TableCell>
+                                    <TableCell className="text-end">{formatCurrencyDisplay(summary.totalCustodyReturnInCurrency, summary.currency, false, true)}</TableCell>
+                                    <TableCell className="text-end">{formatCurrencyDisplay(summary.netRetainedByDriver, summary.currency, true)}</TableCell>
+                                    {CONVERSION_TARGET_CURRENCIES.map((target) => (
+                                        <TableCell key={`${summary.currency}-${target}`} className="text-end hidden sm:table-cell">
+                                            {summary.currency === target
+                                                ? <span className="text-muted-foreground">-</span>
+                                                : formatCurrencyDisplay(summary.convertedValues[target] || 0, target)}
+                                        </TableCell>
+                                    ))}
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                </div>
             ) : (
-              <p className="text-muted-foreground text-center py-4">لا توجد بيانات لعرض تحليل إيرادات السائق حاليًا.</p>
+                <p className="text-muted-foreground text-center py-4">لا توجد مبالغ محتجزة بواسطة السائق لعرضها حاليًا.</p>
             )}
         </div>
-
-
       </CardContent>
     </Card>
   );
