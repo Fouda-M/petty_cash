@@ -9,7 +9,7 @@ import { TransactionType } from "@/types";
 import { Currency, CONVERSION_TARGET_CURRENCIES, getCurrencyInfo, CURRENCIES_INFO } from "@/lib/constants";
 import { convertCurrency } from "@/lib/exchangeRates";
 import { cn } from "@/lib/utils";
-import { TrendingUp, TrendingDown, Wallet, Scale, UserCircle2, HandCoins, Receipt, ShoppingCart, ArchiveRestore, Briefcase } from "lucide-react";
+import { TrendingUp, TrendingDown, Wallet, Scale, UserCircle2, HandCoins, Receipt, ShoppingCart, ArchiveRestore, Briefcase, UserX, Undo2, Pocket, Coins } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 
 interface BalanceSummaryProps {
@@ -43,6 +43,15 @@ interface DriverOutstandingBalance {
   totalReturn: number;
   netOutstanding: number;
 }
+
+interface DriverRetainedFromRevenue {
+    currency: Currency;
+    totalRevenueInCurrency: number;
+    totalCustodyReturnInCurrency: number;
+    netRetainedByDriver: number;
+    convertedValues: { [targetCurrency in Currency]?: number };
+}
+
 
 export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
 
@@ -132,6 +141,28 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
     return summary;
   }, [transactions]);
 
+  const driverRetainedFromRevenueSummary = React.useMemo((): DriverRetainedFromRevenue[] => {
+    return CURRENCIES_INFO.map(currencyInfo => {
+      const totals = totalsByOriginalCurrency[currencyInfo.code] || { revenue: 0, expense: 0, custodyHandover: 0, custodyReturn: 0 };
+      const netRetained = totals.revenue - totals.custodyReturn;
+
+      const convertedValues: { [targetCurrency in Currency]?: number } = {};
+      CONVERSION_TARGET_CURRENCIES.forEach(target => {
+        if (currencyInfo.code !== target) {
+          convertedValues[target] = convertCurrency(netRetained, currencyInfo.code, target);
+        }
+      });
+
+      return {
+        currency: currencyInfo.code,
+        totalRevenueInCurrency: totals.revenue,
+        totalCustodyReturnInCurrency: totals.custodyReturn,
+        netRetainedByDriver: netRetained,
+        convertedValues,
+      };
+    }).filter(s => s.totalRevenueInCurrency !== 0 || s.totalCustodyReturnInCurrency !== 0 || s.netRetainedByDriver !== 0);
+  }, [totalsByOriginalCurrency]);
+
 
   const formatCurrencyDisplay = (amount: number, currencyCode: Currency, showTrendIcons = true, isNeutral = false) => {
     const currencyInfo = getCurrencyInfo(currencyCode);
@@ -171,7 +202,7 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
            <Briefcase className="ms-2 h-6 w-6 text-primary" />
           ملخص مالي شامل
         </CardTitle>
-        <CardDescription>نظرة عامة على الأرصدة المستحقة، التأثير المالي، وربحية الرحلات.</CardDescription>
+        <CardDescription>نظرة عامة على الأرصدة المستحقة، التأثير المالي، ربحية الرحلات، والمبالغ المحتجزة بواسطة السائق.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-8">
         
@@ -199,7 +230,7 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
                   </TableHeader>
                   <TableBody>
                     {driverOutstandingBalances.map((balance) => (
-                      <TableRow key={balance.currency}>
+                      <TableRow key={`outstanding-${balance.currency}`}>
                         <TableCell className="font-medium text-start">{getCurrencyInfo(balance.currency)?.name || balance.currency}</TableCell>
                         <TableCell className="text-end">{formatCurrencyDisplay(balance.totalHandover, balance.currency, false, true)}</TableCell>
                         <TableCell className="text-end">{formatCurrencyDisplay(balance.totalRevenue, balance.currency, false, true)}</TableCell>
@@ -243,7 +274,7 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
                   </TableHeader>
                   <TableBody>
                     {netCompanyCashFlows.map((balance) => (
-                      <TableRow key={balance.currency}>
+                      <TableRow key={`company-cash-${balance.currency}`}>
                         <TableCell className="font-medium text-start">{getCurrencyInfo(balance.currency)?.name || balance.currency}</TableCell>
                         <TableCell className="text-end">
                           {formatCurrencyDisplay(balance.total, balance.currency)}
@@ -279,10 +310,10 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
             <div className="space-y-4">
                 {CONVERSION_TARGET_CURRENCIES.map(targetCurrency => {
                     const details = tripProfitLossSummary[targetCurrency];
-                    if (!details) return null; // Should not happen if initialized
+                    if (!details) return null; 
                     const currencyName = getCurrencyInfo(targetCurrency)?.name || targetCurrency;
                     return (
-                        <div key={targetCurrency} className="p-4 bg-muted/30 rounded-lg shadow">
+                        <div key={`profit-loss-${targetCurrency}`} className="p-4 bg-muted/30 rounded-lg shadow">
                             <h4 className="font-medium text-md mb-3 text-center border-b pb-2">
                                 إجمالي بالـ{currencyName}
                             </h4>
@@ -306,6 +337,59 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
                 })}
             </div>
         </div>
+
+        <Separator />
+
+        {/* Section 4: Driver's Retained Amounts from Revenue (Potential Personal Expenses) */}
+        <div>
+            <h3 className="text-xl font-semibold mb-3 flex items-center">
+                <Coins className="ms-2 h-6 w-6 text-primary" />
+                تحليل إيرادات السائق والمبالغ المحتجزة
+            </h3>
+            <CardDescription className="mb-4">
+                تفصيل الإيرادات التي جمعها السائق، المبالغ التي أعادها منها، والمبلغ الصافي الذي احتفظ به السائق من هذه الإيرادات (والذي قد يشمل مصروفاته الشخصية غير المغطاة من الشركة).
+            </CardDescription>
+            {driverRetainedFromRevenueSummary.length > 0 ? (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-start">العملة</TableHead>
+                      <TableHead className="text-end">إجمالي الإيرادات <TrendingUp className="inline h-4 w-4"/></TableHead>
+                      <TableHead className="text-end">المرتجع من الإيرادات <Undo2 className="inline h-4 w-4"/></TableHead>
+                      <TableHead className="text-end">صافي محتجز للسائق <Pocket className="inline h-4 w-4"/></TableHead>
+                       {CONVERSION_TARGET_CURRENCIES.map((target) => (
+                        <TableHead key={`retained-${target}`} className="text-end hidden sm:table-cell">
+                          صافي السائق بالـ {getCurrencyInfo(target)?.name || target}
+                        </TableHead>
+                      ))}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {driverRetainedFromRevenueSummary.map((summary) => (
+                      <TableRow key={`retained-summary-${summary.currency}`}>
+                        <TableCell className="font-medium text-start">{getCurrencyInfo(summary.currency)?.name || summary.currency}</TableCell>
+                        <TableCell className="text-end">{formatCurrencyDisplay(summary.totalRevenueInCurrency, summary.currency, false, true)}</TableCell>
+                        <TableCell className="text-end">{formatCurrencyDisplay(summary.totalCustodyReturnInCurrency, summary.currency, false, true)}</TableCell>
+                        <TableCell className="text-end">{formatCurrencyDisplay(summary.netRetainedByDriver, summary.currency, true)}</TableCell>
+                        {CONVERSION_TARGET_CURRENCIES.map((target) => (
+                          <TableCell key={`retained-${summary.currency}-${target}`} className="text-end hidden sm:table-cell">
+                            {summary.currency === target 
+                              ? <span className="text-muted-foreground">-</span> 
+                              : formatCurrencyDisplay(summary.convertedValues[target] || 0, target, true)}
+                          </TableCell>
+                        ))}
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            ) : (
+              <p className="text-muted-foreground text-center py-4">لا توجد بيانات لعرض تحليل إيرادات السائق حاليًا.</p>
+            )}
+        </div>
+
+
       </CardContent>
     </Card>
   );
