@@ -116,3 +116,110 @@ body {
     font-feature-settings: "rlig" 1, "calt" 1; /* Enable ligatures and contextual alternates */
   }
 }
+
+/* Print-specific styles */
+@media print {
+  body {
+    margin: 0;
+    padding: 1cm; /* Add some padding for print */
+    font-size: 10pt;
+    color: black !important; /* Ensure text is black for printing */
+    background-color: white !important; /* Ensure background is white */
+    -webkit-print-color-adjust: exact !important; /* Chrome, Safari, Edge */
+    print-color-adjust: exact !important; /* Firefox */
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+  
+  /* Ensure printable cards have a clear border and white background */
+  .printable-card {
+    border: 1px solid #ccc !important;
+    box-shadow: none !important;
+    background-color: white !important;
+    padding: 0.5rem !important;
+    margin-bottom: 1rem !important;
+    page-break-inside: avoid;
+  }
+
+  .printable-title {
+    font-size: 16pt !important;
+    font-weight: bold !important;
+    margin-bottom: 1rem !important;
+    text-align: center !important;
+  }
+
+  .printable-section-title {
+    font-size: 13pt !important;
+    font-weight: bold !important;
+    margin-top: 1.5rem !important;
+    margin-bottom: 0.75rem !important;
+    border-bottom: 1px solid #eee !important;
+    padding-bottom: 0.3rem !important;
+    page-break-after: avoid;
+  }
+
+  .printable-table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    margin-bottom: 1rem !important;
+    font-size: 9pt !important;
+  }
+
+  .printable-table th,
+  .printable-table td {
+    border: 1px solid #ddd !important;
+    padding: 6px !important; /* Slightly more padding for readability */
+    text-align: start !important; /* For RTL */
+  }
+
+  .printable-table th {
+    background-color: #f9f9f9 !important;
+    font-weight: bold !important;
+  }
+  
+  .printable-table tfoot td {
+    font-weight: bold !important;
+    background-color: #f0f0f0 !important;
+  }
+
+  /* Specific text colors for print */
+  .print-text-positive {
+    color: green !important;
+  }
+  .print-text-negative {
+    color: red !important;
+  }
+  .print-text-neutral {
+    color: black !important;
+  }
+
+  /* Avoid breaking elements across pages where possible */
+  section, .printable-card, .printable-table {
+    page-break-inside: avoid;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    page-break-after: avoid;
+  }
+
+  a {
+    text-decoration: none !important;
+    color: black !important; /* Avoid default blue links */
+  }
+  a[href]:after {
+    content: " (" attr(href) ")"; /* Optionally show URLs for links */
+    font-size: 0.8em;
+    color: #555;
+  }
+}
+
+/* Default state for print-only elements (hidden on screen) */
+.print-only {
+  display: none;
+}
