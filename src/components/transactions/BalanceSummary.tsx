@@ -35,11 +35,12 @@ interface TransactionDetail {
   originalCurrency: Currency;
   originalAmount: number;
   convertedAmount: number; // to the target currency of the summary section
+  type: TransactionType; // Added to distinguish revenue from client custody in details
 }
 
 interface TripProfitLossDetails {
-  revenue: number; 
-  revenueDetails: TransactionDetail[];
+  revenueAndClientCustody: number; 
+  revenueAndClientCustodyDetails: TransactionDetail[];
   expense: number;
   expenseDetails: TransactionDetail[];
   custodyOwner: number;
@@ -138,6 +139,8 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
           custodyReturn: 0,
           driverFee: 0,
       };
+      // Net company cash is: Revenue + Custody Return - (Expense + Custody Handover Owner + Driver Fee)
+      // Custody Handover Client is between Client and Driver, does not directly hit company cash immediately.
       const netInOriginal = originalTotals.revenue + originalTotals.custodyReturn - originalTotals.expense - originalTotals.custodyHandoverOwner - originalTotals.driverFee;
       
       const convertedValues: { [targetCurrency in Currency]?: number } = {};
@@ -162,12 +165,12 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
     const summary: Record<Currency, TripProfitLossDetails> = {} as any;
 
     CONVERSION_TARGET_CURRENCIES.forEach(targetCurrency => {
-      let totalConvertedRevenue = 0;
+      let totalConvertedRevenueAndClientCustody = 0;
       let totalConvertedExpenses = 0;
       let totalConvertedCustodyOwner = 0;
       let totalConvertedDriverFee = 0;
       
-      const revenueDetailsForTarget: TransactionDetail[] = [];
+      const revenueAndClientCustodyDetailsForTarget: TransactionDetail[] = [];
       const expenseDetailsForTarget: TransactionDetail[] = [];
       const custodyOwnerDetailsForTarget: TransactionDetail[] = [];
       const driverFeeDetailsForTarget: TransactionDetail[] = [];
@@ -180,11 +183,12 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
             originalCurrency: t.currency,
             originalAmount: t.amount,
             convertedAmount: convertedAmount,
+            type: t.type, // Store type for detail breakdown
         };
 
-        if (type === TransactionType.REVENUE) {
-            totalConvertedRevenue += convertedAmount;
-            revenueDetailsForTarget.push(detail);
+        if (type === TransactionType.REVENUE || type === TransactionType.CUSTODY_HANDOVER_CLIENT) {
+            totalConvertedRevenueAndClientCustody += convertedAmount;
+            revenueAndClientCustodyDetailsForTarget.push(detail);
         }
         else if (type === TransactionType.EXPENSE) {
             totalConvertedExpenses += convertedAmount;
@@ -201,15 +205,15 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
       });
       
       summary[targetCurrency] = {
-        revenue: totalConvertedRevenue,
-        revenueDetails: revenueDetailsForTarget,
+        revenueAndClientCustody: totalConvertedRevenueAndClientCustody,
+        revenueAndClientCustodyDetails: revenueAndClientCustodyDetailsForTarget,
         expense: totalConvertedExpenses,
         expenseDetails: expenseDetailsForTarget,
         custodyOwner: totalConvertedCustodyOwner,
         custodyOwnerDetails: custodyOwnerDetailsForTarget,
         driverFee: totalConvertedDriverFee,
         driverFeeDetails: driverFeeDetailsForTarget,
-        net: totalConvertedRevenue - totalConvertedExpenses - totalConvertedCustodyOwner - totalConvertedDriverFee
+        net: totalConvertedRevenueAndClientCustody - totalConvertedExpenses - totalConvertedCustodyOwner - totalConvertedDriverFee
       };
     });
     return summary;
@@ -226,6 +230,7 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
           driverFee: 0, 
       };
 
+      // Driver Retained = (Revenue collected by driver + Custody Handover from Client) - Custody Returned by driver
       const netRetained = (totals.revenue + totals.custodyHandoverClient) - totals.custodyReturn;
       
       const convertedValues: { [targetCurrency in Currency]?: number } = {};
@@ -269,12 +274,20 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
     if (details.length === 0) return null;
     return (
       <div className="ps-6 pe-2 mt-1 text-xs text-muted-foreground space-y-0.5 border-s border-dashed border-primary/50 ms-2">
-          {details.map((detail, index) => (
+          {details.map((detail, index) => {
+            let prefix = "↳ من";
+            if (detail.type === TransactionType.CUSTODY_HANDOVER_CLIENT) {
+                prefix = "↳ عهدة عميل من";
+            } else if (detail.type === TransactionType.REVENUE) {
+                prefix = "↳ إيراد من";
+            }
+            return (
               <div key={index} className="flex justify-between items-center py-0.5">
-                  <span className="whitespace-nowrap">↳ من {getCurrencyInfo(detail.originalCurrency)?.name || detail.originalCurrency}: {formatCurrencyDisplay(detail.originalAmount, detail.originalCurrency, false, true)}</span>
+                  <span className="whitespace-nowrap">{prefix} {getCurrencyInfo(detail.originalCurrency)?.name || detail.originalCurrency}: {formatCurrencyDisplay(detail.originalAmount, detail.originalCurrency, false, true)}</span>
                   <span className="whitespace-nowrap text-end">(يعادل {formatCurrencyDisplay(detail.convertedAmount, targetCurrency, false, true)})</span>
               </div>
-          ))}
+            );
+          })}
       </div>
     );
   };
@@ -447,7 +460,7 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
                 ملخص ربحية الرحلات (معادل)
             </h3>
             <CardDescription className="mb-4">
-                تحليل إجمالي الإيرادات، المصروفات، العهد المسلمة من المالك، وأجرة السائق المحولة لعملات رئيسية لتحديد ربحية الرحلات.
+                تحليل إجمالي الإيرادات (متضمنًا العهد من العملاء)، المصروفات، العهد المسلمة من المالك، وأجرة السائق المحولة لعملات رئيسية لتحديد ربحية الرحلات.
             </CardDescription>
             <div className="space-y-4">
                 {CONVERSION_TARGET_CURRENCIES.map(targetCurrency => {
@@ -461,10 +474,10 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
                             </h4>
                             <div className="space-y-1.5 text-sm">
                                 <div className="flex justify-between items-center">
-                                    <span><Receipt className="inline h-4 w-4 me-1 text-primary"/>إجمالي الإيرادات (رحلات):</span>
-                                    {formatCurrencyDisplay(details.revenue, targetCurrency, false)}
+                                    <span><Receipt className="inline h-4 w-4 me-1 text-primary"/>إجمالي الإيرادات (رحلات + عهدة عميل):</span>
+                                    {formatCurrencyDisplay(details.revenueAndClientCustody, targetCurrency, false)}
                                 </div>
-                                {renderItemizedTransactionDetailBreakdown(details.revenueDetails, targetCurrency)}
+                                {renderItemizedTransactionDetailBreakdown(details.revenueAndClientCustodyDetails, targetCurrency)}
                                 
                                 <div className="flex justify-between items-center">
                                     <span><ShoppingCart className="inline h-4 w-4 me-1 text-primary"/>إجمالي المصروفات (رحلات):</span>
@@ -482,8 +495,7 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
                                     <span><HandCoins className="inline h-4 w-4 me-1 text-primary"/>اجرة السائق:</span>
                                     {formatCurrencyDisplay(details.driverFee, targetCurrency, false)}
                                 </div>
-                                {/* Optionally render driverFeeDetails if needed in the future */}
-                                {/* {renderItemizedTransactionDetailBreakdown(details.driverFeeDetails, targetCurrency)} */}
+                                {renderAggregatedTransactionDetailBreakdown(details.driverFeeDetails, targetCurrency)}
 
                                 <Separator className="my-2" />
                                 <div className="flex justify-between items-center text-base">
@@ -553,3 +565,4 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
     </Card>
   );
 }
+
