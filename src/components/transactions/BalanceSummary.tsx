@@ -45,7 +45,7 @@ interface TripProfitLossDetails {
   custodyOwner: number;
   custodyOwnerDetails: TransactionDetail[];
   driverFee: number;
-  driverFeeDetails: TransactionDetail[]; // Added for consistency, though not explicitly requested for display yet
+  driverFeeDetails: TransactionDetail[]; 
   net: number;
 }
 
@@ -265,7 +265,7 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
     );
   };
 
-  const renderTransactionDetailBreakdown = (details: TransactionDetail[], targetCurrency: Currency) => {
+  const renderItemizedTransactionDetailBreakdown = (details: TransactionDetail[], targetCurrency: Currency) => {
     if (details.length === 0) return null;
     return (
       <div className="ps-6 pe-2 mt-1 text-xs text-muted-foreground space-y-0.5 border-s border-dashed border-primary/50 ms-2">
@@ -275,6 +275,42 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
                   <span className="whitespace-nowrap text-end">(يعادل {formatCurrencyDisplay(detail.convertedAmount, targetCurrency, false, true)})</span>
               </div>
           ))}
+      </div>
+    );
+  };
+
+  const renderAggregatedTransactionDetailBreakdown = (details: TransactionDetail[], targetCurrency: Currency) => {
+    if (details.length === 0) return null;
+
+    const aggregated: Map<Currency, { totalOriginal: number, totalConverted: number }> = new Map();
+
+    details.forEach(detail => {
+      const existing = aggregated.get(detail.originalCurrency);
+      if (existing) {
+        existing.totalOriginal += detail.originalAmount;
+        existing.totalConverted += detail.convertedAmount;
+      } else {
+        aggregated.set(detail.originalCurrency, {
+          totalOriginal: detail.originalAmount,
+          totalConverted: detail.convertedAmount,
+        });
+      }
+    });
+  
+    if (aggregated.size === 0) return null;
+    
+    return (
+      <div className="ps-6 pe-2 mt-1 text-xs text-muted-foreground space-y-0.5 border-s border-dashed border-primary/50 ms-2">
+        {Array.from(aggregated.entries()).map(([originalCurrency, totals], index) => (
+          <div key={index} className="flex justify-between items-center py-0.5">
+            <span className="whitespace-nowrap">
+              ↳ منها بالـ{getCurrencyInfo(originalCurrency)?.name || originalCurrency}: {formatCurrencyDisplay(totals.totalOriginal, originalCurrency, false, true)}
+            </span>
+            <span className="whitespace-nowrap text-end">
+              (يعادل {formatCurrencyDisplay(totals.totalConverted, targetCurrency, false, true)})
+            </span>
+          </div>
+        ))}
       </div>
     );
   };
@@ -428,26 +464,26 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
                                     <span><Receipt className="inline h-4 w-4 me-1 text-primary"/>إجمالي الإيرادات (رحلات):</span>
                                     {formatCurrencyDisplay(details.revenue, targetCurrency, false)}
                                 </div>
-                                {renderTransactionDetailBreakdown(details.revenueDetails, targetCurrency)}
+                                {renderItemizedTransactionDetailBreakdown(details.revenueDetails, targetCurrency)}
                                 
                                 <div className="flex justify-between items-center">
                                     <span><ShoppingCart className="inline h-4 w-4 me-1 text-primary"/>إجمالي المصروفات (رحلات):</span>
                                     {formatCurrencyDisplay(details.expense, targetCurrency, false)}
                                 </div>
-                                {renderTransactionDetailBreakdown(details.expenseDetails, targetCurrency)}
+                                {renderAggregatedTransactionDetailBreakdown(details.expenseDetails, targetCurrency)}
 
                                 <div className="flex justify-between items-center">
                                     <span><Landmark className="inline h-4 w-4 me-1 text-primary"/>اجمالى العهد (مسلمة من المالك):</span>
                                     {formatCurrencyDisplay(details.custodyOwner, targetCurrency, false)}
                                 </div>
-                                {renderTransactionDetailBreakdown(details.custodyOwnerDetails, targetCurrency)}
+                                {renderItemizedTransactionDetailBreakdown(details.custodyOwnerDetails, targetCurrency)}
                                 
                                 <div className="flex justify-between items-center">
                                     <span><HandCoins className="inline h-4 w-4 me-1 text-primary"/>اجرة السائق:</span>
                                     {formatCurrencyDisplay(details.driverFee, targetCurrency, false)}
                                 </div>
                                 {/* Optionally render driverFeeDetails if needed in the future */}
-                                {/* {renderTransactionDetailBreakdown(details.driverFeeDetails, targetCurrency)} */}
+                                {/* {renderItemizedTransactionDetailBreakdown(details.driverFeeDetails, targetCurrency)} */}
 
                                 <Separator className="my-2" />
                                 <div className="flex justify-between items-center text-base">
@@ -517,4 +553,3 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
     </Card>
   );
 }
-
