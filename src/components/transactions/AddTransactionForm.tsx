@@ -59,8 +59,8 @@ export default function AddTransactionForm({
     } : {
       type: TransactionType.EXPENSE,
       description: "",
-      amount: "" as unknown as number, 
-      currency: undefined, 
+      amount: undefined, // Will be handled by parseFloat or set to undefined if empty string
+      currency: CURRENCIES_INFO[0].code, // Default to the first currency
       date: new Date(),
     },
   });
@@ -76,8 +76,8 @@ export default function AddTransactionForm({
       form.reset({
         type: TransactionType.EXPENSE,
         description: "",
-        amount: "" as unknown as number,
-        currency: undefined,
+        amount: undefined,
+        currency: CURRENCIES_INFO[0].code, // Default to the first currency on reset for new form
         date: new Date(),
       });
     }
@@ -110,8 +110,8 @@ export default function AddTransactionForm({
           form.reset({ 
               type: TransactionType.EXPENSE,
               description: "",
-              amount: "" as unknown as number,
-              currency: undefined,
+              amount: undefined,
+              currency: CURRENCIES_INFO[0].code, // Reset with default currency
               date: new Date(),
           });
         }
@@ -204,7 +204,10 @@ export default function AddTransactionForm({
                     {...field} 
                     step="0.01"
                     value={field.value === undefined || field.value === null || Number.isNaN(field.value) ? '' : String(field.value)}
-                    onChange={e => field.onChange(e.target.value === '' ? undefined : parseFloat(e.target.value))}
+                    onChange={e => {
+                        const val = e.target.value;
+                        field.onChange(val === '' ? undefined : parseFloat(val));
+                    }}
                   />
                 </FormControl>
                 <FormMessage />
@@ -287,3 +290,4 @@ export default function AddTransactionForm({
     </Card>
   );
 }
+
