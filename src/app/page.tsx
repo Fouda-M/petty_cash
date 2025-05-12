@@ -31,7 +31,7 @@ export default function HomePage() {
         const parsedTransactions = JSON.parse(savedTransactions, (key, value) => {
           if (key === 'date') return new Date(value);
           return value;
-        }).map((t: any) => { // Use any for broader compatibility with old structure
+        }).map((t: any) => { 
           let type = t.type;
           // Migration for old CUSTODY_HANDOVER type
           if (type === 'CUSTODY_HANDOVER') { 
@@ -39,6 +39,7 @@ export default function HomePage() {
             type = TransactionType.CUSTODY_HANDOVER_OWNER; 
           } else if (!Object.values(TransactionType).includes(type as TransactionType)) {
             // If type is invalid or missing from current enum, default to EXPENSE
+            console.warn(`Invalid transaction type "${t.type}" found for transaction ID "${t.id}". Defaulting to EXPENSE.`);
             type = TransactionType.EXPENSE;
           }
           return { 
@@ -67,7 +68,7 @@ export default function HomePage() {
       setTransactions([]); 
     }
     setIsLoading(false); 
-  }, [toast]); // Added toast to dependency array as it's used in catch
+  }, [toast]); 
 
   React.useEffect(() => {
     if (!isLoading) { 
@@ -125,7 +126,13 @@ export default function HomePage() {
       </div>
 
       {isEditModalOpen && transactionToEdit && (
-        <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
+        <Dialog open={isEditModalOpen} onOpenChange={(isOpen) => {
+            if (!isOpen) {
+                handleCloseEditModal();
+            } else {
+                setIsEditModalOpen(true);
+            }
+        }}>
           <DialogContent className="sm:max-w-[425px] md:max-w-[600px]">
             <DialogHeader>
               <DialogTitle>تعديل المعاملة</DialogTitle>
@@ -137,7 +144,7 @@ export default function HomePage() {
               transactionToEdit={transactionToEdit}
               onTransactionUpdated={handleTransactionUpdated}
               onCancelEdit={handleCloseEditModal}
-              className="pt-4" // Add some padding to the form when inside dialog
+              className="pt-4" 
             />
           </DialogContent>
         </Dialog>

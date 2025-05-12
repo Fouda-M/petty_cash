@@ -39,6 +39,14 @@ interface AddTransactionFormProps {
   className?: string; 
 }
 
+const getDefaultFormValues = (): TransactionFormData => ({
+  type: TransactionType.EXPENSE,
+  description: "",
+  amount: undefined, // Will be handled by parseFloat or set to undefined if empty string
+  currency: CURRENCIES_INFO[0].code, // Default to the first currency
+  date: new Date(),
+});
+
 export default function AddTransactionForm({ 
   onTransactionAdded, 
   transactionToEdit, 
@@ -53,16 +61,13 @@ export default function AddTransactionForm({
 
   const form = useForm<TransactionFormData>({
     resolver: zodResolver(transactionSchema),
-    defaultValues: transactionToEdit ? {
-      ...transactionToEdit,
-      amount: transactionToEdit.amount, // ensure amount is a number for the form
-    } : {
-      type: TransactionType.EXPENSE,
-      description: "",
-      amount: undefined, // Will be handled by parseFloat or set to undefined if empty string
-      currency: CURRENCIES_INFO[0].code, // Default to the first currency
-      date: new Date(),
-    },
+    defaultValues: transactionToEdit 
+      ? {
+          ...transactionToEdit,
+          amount: transactionToEdit.amount, 
+          date: new Date(transactionToEdit.date), // Ensure date is a Date object for the form
+        } 
+      : getDefaultFormValues(),
   });
 
   React.useEffect(() => {
@@ -70,16 +75,13 @@ export default function AddTransactionForm({
       form.reset({
         ...transactionToEdit,
         amount: transactionToEdit.amount,
-        date: new Date(transactionToEdit.date), // Ensure date is a Date object
+        date: new Date(transactionToEdit.date), // Ensure date is always a new Date object
       });
     } else {
-      form.reset({
-        type: TransactionType.EXPENSE,
-        description: "",
-        amount: undefined,
-        currency: CURRENCIES_INFO[0].code, // Default to the first currency on reset for new form
-        date: new Date(),
-      });
+      // Only reset to defaults if not in edit mode AND not already reset by onTransactionAdded
+      if (!form.formState.isSubmitSuccessful) { // Avoid resetting after successful add
+         form.reset(getDefaultFormValues());
+      }
     }
   }, [transactionToEdit, form]);
 
@@ -105,15 +107,11 @@ export default function AddTransactionForm({
         });
         if (isEditMode && onTransactionUpdated) {
           onTransactionUpdated(result.data);
+          // Optionally, call onCancelEdit here if the dialog should close after update.
+          // This is often handled by the parent component that manages the dialog.
         } else if (onTransactionAdded) {
           onTransactionAdded(result.data);
-          form.reset({ 
-              type: TransactionType.EXPENSE,
-              description: "",
-              amount: undefined,
-              currency: CURRENCIES_INFO[0].code, // Reset with default currency
-              date: new Date(),
-          });
+          form.reset(getDefaultFormValues());
         }
       } else {
         toast({
@@ -272,8 +270,6 @@ export default function AddTransactionForm({
   );
 
 
-  // If in edit mode, the parent (Dialog) will handle the Card-like structure.
-  // Otherwise, wrap in a Card for the "add transaction" section.
   if (isEditMode) {
     return <div className={className}>{formContent}</div>;
   }
@@ -290,4 +286,3 @@ export default function AddTransactionForm({
     </Card>
   );
 }
-
