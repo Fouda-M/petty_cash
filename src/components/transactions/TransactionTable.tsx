@@ -15,7 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import type { Transaction } from "@/types";
 import { Currency, getCurrencyInfo, CURRENCIES_INFO } from "@/lib/constants";
 import { format } from "date-fns";
-import { arSA } from "date-fns/locale"; // Import Arabic locale
+import { arSA } from "date-fns/locale"; 
 import { ArrowUpDown, ListFilter, Trash2 } from "lucide-react";
 import {
   DropdownMenu,
@@ -56,12 +56,16 @@ export default function TransactionTable({ transactions, onDeleteTransaction }: 
       } else {
         newSet.add(currency);
       }
+      // If all are unchecked, effectively no filter (show all)
+      // Or if all are checked, also no filter (show all) - this logic might need adjustment based on exact requirement
+      // For now, if becomes empty, re-fill with all currencies to show all.
       return newSet.size === 0 ? new Set(Object.values(Currency)) : newSet;
     });
   };
   
   const sortedTransactions = React.useMemo(() => {
-    let filtered = [...transactions].filter(t => currencyFilter.has(t.currency));
+    let filtered = [...transactions].filter(t => currencyFilter.size === Object.values(Currency).length || currencyFilter.has(t.currency));
+
 
     if (sortKey === 'none') return filtered;
     
@@ -86,7 +90,6 @@ export default function TransactionTable({ transactions, onDeleteTransaction }: 
 
   const formatCurrency = (amount: number, currencyCode: Currency) => {
     const currencyInfo = getCurrencyInfo(currencyCode);
-    // Use 'ar' locale for number formatting if applicable, or keep default
     return `${currencyInfo?.symbol || ''}${amount.toLocaleString('ar', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
@@ -113,11 +116,11 @@ export default function TransactionTable({ transactions, onDeleteTransaction }: 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="sm">
-              <ListFilter className="ml-2 h-4 w-4" /> {/* Changed mr-2 to ml-2 */}
+              <ListFilter className="ms-2 h-4 w-4" /> 
               تصفية حسب العملة
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
+          <DropdownMenuContent align="end" dir="rtl">
             <DropdownMenuLabel>تصفية حسب العملة</DropdownMenuLabel>
             <DropdownMenuSeparator />
             {CURRENCIES_INFO.map(c => (
@@ -141,25 +144,25 @@ export default function TransactionTable({ transactions, onDeleteTransaction }: 
                   onClick={() => handleSort('date')}
                   className="cursor-pointer hover:bg-accent text-start"
                 >
-                  التاريخ <ArrowUpDown className={`mr-2 h-4 w-4 inline ${sortKey === 'date' ? 'opacity-100' : 'opacity-50'}`} /> {/* Changed ml-2 to mr-2 */}
+                  التاريخ <ArrowUpDown className={`me-2 h-4 w-4 inline ${sortKey === 'date' ? 'opacity-100' : 'opacity-50'}`} /> 
                 </TableHead>
                 <TableHead
                   onClick={() => handleSort('description')}
                   className="cursor-pointer hover:bg-accent text-start"
                 >
-                  الوصف <ArrowUpDown className={`mr-2 h-4 w-4 inline ${sortKey === 'description' ? 'opacity-100' : 'opacity-50'}`} /> {/* Changed ml-2 to mr-2 */}
+                  الوصف <ArrowUpDown className={`me-2 h-4 w-4 inline ${sortKey === 'description' ? 'opacity-100' : 'opacity-50'}`} /> 
                 </TableHead>
                 <TableHead
                   onClick={() => handleSort('amount')}
                   className="text-end cursor-pointer hover:bg-accent"
                 >
-                  المبلغ <ArrowUpDown className={`mr-2 h-4 w-4 inline ${sortKey === 'amount' ? 'opacity-100' : 'opacity-50'}`} /> {/* Changed ml-2 to mr-2 */}
+                  المبلغ <ArrowUpDown className={`me-2 h-4 w-4 inline ${sortKey === 'amount' ? 'opacity-100' : 'opacity-50'}`} /> 
                 </TableHead>
                 <TableHead
                   onClick={() => handleSort('currency')}
                   className="cursor-pointer hover:bg-accent text-start"
                 >
-                  العملة <ArrowUpDown className={`mr-2 h-4 w-4 inline ${sortKey === 'currency' ? 'opacity-100' : 'opacity-50'}`} /> {/* Changed ml-2 to mr-2 */}
+                  العملة <ArrowUpDown className={`me-2 h-4 w-4 inline ${sortKey === 'currency' ? 'opacity-100' : 'opacity-50'}`} /> 
                 </TableHead>
                 <TableHead className="text-end">الإجراءات</TableHead>
               </TableRow>
@@ -185,3 +188,4 @@ export default function TransactionTable({ transactions, onDeleteTransaction }: 
     </Card>
   );
 }
+

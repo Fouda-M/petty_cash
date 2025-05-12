@@ -58,11 +58,12 @@ export default function AddTransactionForm({ onTransactionAdded }: AddTransactio
           description: `تم تسجيل ${result.data.description} بنجاح.`,
         });
         onTransactionAdded(result.data);
-        form.reset();
-        form.setValue("description", "");
-        form.setValue("amount", "" as unknown as number);
-        form.setValue("currency", undefined);
-        form.setValue("date", new Date());
+        form.reset({ // Reset with default values to ensure all fields are cleared properly
+            description: "",
+            amount: "" as unknown as number,
+            currency: undefined,
+            date: new Date(),
+        });
       } else {
         toast({
           variant: "destructive",
@@ -124,7 +125,8 @@ export default function AddTransactionForm({ onTransactionAdded }: AddTransactio
                         placeholder="0.00" 
                         {...field} 
                         step="0.01"
-                        value={field.value === undefined ? '' : field.value} 
+                        value={field.value === undefined || field.value === null || Number.isNaN(field.value) ? '' : String(field.value)}
+                        onChange={e => field.onChange(e.target.value === '' ? undefined : parseFloat(e.target.value))}
                       />
                     </FormControl>
                     <FormMessage />
@@ -139,7 +141,8 @@ export default function AddTransactionForm({ onTransactionAdded }: AddTransactio
                     <FormLabel>العملة</FormLabel>
                     <Select 
                       onValueChange={field.onChange} 
-                      value={field.value} 
+                      value={field.value}
+                      dir="rtl"
                     >
                       <FormControl>
                         <SelectTrigger>
@@ -149,7 +152,7 @@ export default function AddTransactionForm({ onTransactionAdded }: AddTransactio
                       <SelectContent>
                         {CURRENCIES_INFO.map((currencyInfo) => (
                           <SelectItem key={currencyInfo.code} value={currencyInfo.code}>
-                            {currencyInfo.name} ({currencyInfo.symbol}) {/* Display name and symbol */}
+                            {currencyInfo.name} ({currencyInfo.symbol})
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -173,7 +176,7 @@ export default function AddTransactionForm({ onTransactionAdded }: AddTransactio
               )}
             />
             <Button type="submit" className="w-full" disabled={isSubmitting}>
-              {isSubmitting && <Loader2 className="ml-2 h-4 w-4 animate-spin" />} {/* Changed mr-2 to ml-2 */}
+              {isSubmitting && <Loader2 className="ms-2 h-4 w-4 animate-spin" />}
               إضافة معاملة
             </Button>
           </form>
@@ -182,3 +185,4 @@ export default function AddTransactionForm({ onTransactionAdded }: AddTransactio
     </Card>
   );
 }
+

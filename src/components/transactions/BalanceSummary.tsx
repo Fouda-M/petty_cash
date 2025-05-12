@@ -8,7 +8,8 @@ import type { Transaction } from "@/types";
 import { Currency, CONVERSION_TARGET_CURRENCIES, getCurrencyInfo, CURRENCIES_INFO } from "@/lib/constants";
 import { convertCurrency } from "@/lib/exchangeRates";
 import { cn } from "@/lib/utils";
-import { TrendingUp, TrendingDown, Wallet } from "lucide-react";
+import { TrendingUp, TrendingDown, Wallet, Landmark } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
 
 interface BalanceSummaryProps {
   transactions: Transaction[];
@@ -20,8 +21,12 @@ interface CalculatedBalance {
   convertedValues: { [targetCurrency in Currency]?: number };
 }
 
+interface GrandTotals {
+  [key: string]: number; // e.g. USD: 1234.56
+}
+
 export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
-  const balances = React.useMemo(() => {
+  const { balances, grandTotals } = React.useMemo(() => {
     const accBalances: Record<Currency, number> = {} as Record<Currency, number>;
     for (const currency of Object.values(Currency)) {
         accBalances[currency] = 0;
@@ -33,7 +38,7 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
     
     const relevantCurrencies = CURRENCIES_INFO.filter(c => accBalances[c.code] !== 0 || CONVERSION_TARGET_CURRENCIES.includes(c.code));
 
-    return relevantCurrencies.map((currencyInfo) => {
+    const calculatedBalances = relevantCurrencies.map((currencyInfo) => {
       const total = accBalances[currencyInfo.code];
       const convertedValues: { [targetCurrency in Currency]?: number } = {};
       CONVERSION_TARGET_CURRENCIES.forEach((target) => {
@@ -47,19 +52,28 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
       const bIsTarget = CONVERSION_TARGET_CURRENCIES.includes(b.currency) && b.total !== 0;
       if (aIsTarget && !bIsTarget) return -1;
       if (!aIsTarget && bIsTarget) return 1;
-      // Use localeCompare for currency codes if they are strings, or direct comparison if enums
       return a.currency.localeCompare(b.currency);
-
     });
+
+    const calculatedGrandTotals: GrandTotals = {};
+    CONVERSION_TARGET_CURRENCIES.forEach(targetCurrency => {
+      calculatedGrandTotals[targetCurrency] = 0;
+      transactions.forEach(transaction => {
+        calculatedGrandTotals[targetCurrency] += convertCurrency(transaction.amount, transaction.currency, targetCurrency);
+      });
+    });
+
+    return { balances: calculatedBalances, grandTotals: calculatedGrandTotals };
+
   }, [transactions]);
 
   const formatCurrencyDisplay = (amount: number, currencyCode: Currency) => {
     const currencyInfo = getCurrencyInfo(currencyCode);
-    const displayAmount = amount.toLocaleString('ar', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); // Use 'ar' locale for number formatting
+    const displayAmount = amount.toLocaleString('ar', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     return (
-      <span className={cn(amount > 0 ? "text-[hsl(var(--positive-balance-fg))]" : amount < 0 ? "text-[hsl(var(--negative-balance-fg))]" : "text-muted-foreground")}>
-        {amount > 0 && <TrendingUp className="inline h-4 w-4 ml-1" />} {/* Changed mr-1 to ml-1 */}
-        {amount < 0 && <TrendingDown className="inline h-4 w-4 ml-1" />} {/* Changed mr-1 to ml-1 */}
+      <span className={cn(amount >= 0 ? "text-[hsl(var(--positive-balance-fg))]" : "text-[hsl(var(--negative-balance-fg))]", "whitespace-nowrap")}>
+        {amount > 0 && <TrendingUp className="inline h-4 w-4 ms-1" />}
+        {amount < 0 && <TrendingDown className="inline h-4 w-4 ms-1" />}
         {currencyInfo?.symbol || ''}{displayAmount}
       </span>
     );
@@ -70,7 +84,7 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
       <Card className="shadow-lg">
         <CardHeader>
           <CardTitle className="flex items-center">
-            <Wallet className="ml-2 h-6 w-6 text-primary" /> {/* Changed mr-2 to ml-2 */}
+            <Wallet className="ms-2 h-6 w-6 text-primary" />
             ملخص الرصيد
           </CardTitle>
         </CardHeader>
@@ -85,12 +99,12 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
     <Card className="shadow-lg">
       <CardHeader>
         <CardTitle className="flex items-center">
-          <Wallet className="ml-2 h-6 w-6 text-primary" /> {/* Changed mr-2 to ml-2 */}
+          <Wallet className="ms-2 h-6 w-6 text-primary" />
           ملخص الرصيد
         </CardTitle>
-        <CardDescription>نظرة عامة على أرصدتك بعملات مختلفة.</CardDescription>
+        <CardDescription>نظرة عامة على أرصدتك بعملات مختلفة وإجمالي القيمة المعادلة.</CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-6">
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
@@ -99,13 +113,13 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
                 <TableHead className="text-end">إجمالي الرصيد</TableHead>
                 {CONVERSION_TARGET_CURRENCIES.map((target) => (
                   <TableHead key={target} className="text-end hidden sm:table-cell">
-                    بالـ {target}
+                    بالـ {getCurrencyInfo(target)?.name || target}
                   </TableHead>
                 ))}
               </TableRow>
             </TableHeader>
             <TableBody>
-              {balances.map((balance) => (
+              {balances.filter(b => b.total !== 0 || CONVERSION_TARGET_CURRENCIES.includes(b.currency)).map((balance) => (
                 <TableRow key={balance.currency}>
                   <TableCell className="font-medium text-start">{getCurrencyInfo(balance.currency)?.name || balance.currency}</TableCell>
                   <TableCell className="text-end font-semibold">
@@ -123,7 +137,27 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
             </TableBody>
           </Table>
         </div>
+        
+        <Separator />
+
+        <div>
+            <h3 className="text-lg font-semibold mb-3 flex items-center">
+                <Landmark className="ms-2 h-5 w-5 text-primary" />
+                إجمالي القيمة المعادلة
+            </h3>
+            <div className="space-y-2">
+                {CONVERSION_TARGET_CURRENCIES.map(targetCurrency => (
+                    <div key={targetCurrency} className="flex justify-between items-center p-3 bg-muted/50 rounded-md">
+                        <span className="font-medium">{getCurrencyInfo(targetCurrency)?.name || targetCurrency}:</span>
+                        <span className="font-bold text-lg">
+                            {formatCurrencyDisplay(grandTotals[targetCurrency] || 0, targetCurrency)}
+                        </span>
+                    </div>
+                ))}
+            </div>
+        </div>
       </CardContent>
     </Card>
   );
 }
+
