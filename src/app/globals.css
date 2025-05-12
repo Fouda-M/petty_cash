@@ -116,3 +116,70 @@ body {
     font-feature-settings: "rlig" 1, "calt" 1; /* Enable ligatures and contextual alternates */
   }
 }
+
+@media print {
+  body * {
+    visibility: hidden;
+    -webkit-print-color-adjust: exact !important; /* Chrome, Safari */
+    print-color-adjust: exact !important; /* Standard */
+  }
+  .print-only, .print-only * {
+    visibility: visible;
+  }
+  .print-only {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 10mm; /* Adjust as needed */
+    font-size: 10pt; /* Adjust as needed */
+    background-color: white !important;
+    color: black !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  @page {
+    size: A4;
+    margin: 15mm; /* Adjust margins as needed */
+  }
+  /* Additional print-specific styles */
+  .print-only h1, .print-only h2, .print-only h3, .print-only h4, .print-only p, .print-only span, .print-only div, .print-only li {
+    color: black !important;
+    background-color: transparent !important;
+  }
+  .print-only .border {
+    border-color: #ccc !important; /* Lighter borders for print */
+  }
+  .print-only .text-primary, .print-only svg.text-primary {
+      color: black !important;
+      fill: black !important;
+  }
+  .print-text-positive { 
+    color: green !important; 
+    font-weight: bold;
+  }
+  .print-text-negative { 
+    color: red !important; 
+    font-weight: bold;
+  }
+  .print-text-neutral, .print-text-default { 
+    color: black !important; 
+  }
+  .print-only table, .print-only th, .print-only td {
+    border: 1px solid #ccc !important;
+  }
+  .print-only th, .print-only td {
+    padding: 4px 8px;
+  }
+  .print-only .bg-muted\/30 {
+    background-color: #f9f9f9 !important;
+  }
+  .print-only .font-semibold {
+    font-weight: 600 !important;
+  }
+  .print-only .font-bold {
+    font-weight: 700 !important;
+  }
+}

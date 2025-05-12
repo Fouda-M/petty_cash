@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import * as React from "react";
@@ -8,6 +9,9 @@ import BalanceSummary from "@/components/transactions/BalanceSummary";
 import type { Transaction } from "@/types";
 import { TransactionType } from "@/types"; 
 import { useToast } from "@/hooks/use-toast";
+import { Button } from "@/components/ui/button";
+import { Printer } from "lucide-react";
+import PrintableReport from "@/components/print/PrintableReport";
 import {
   Dialog,
   DialogContent,
@@ -33,21 +37,18 @@ export default function HomePage() {
           return value;
         }).map((t: any) => { 
           let type = t.type;
-          // Migration for old CUSTODY_HANDOVER type
           if (type === 'CUSTODY_HANDOVER') { 
-            // Default migration: assume old handovers were from owner
             type = TransactionType.CUSTODY_HANDOVER_OWNER; 
           } else if (!Object.values(TransactionType).includes(type as TransactionType)) {
-            // If type is invalid or missing from current enum, default to EXPENSE
             console.warn(`Invalid transaction type "${t.type}" found for transaction ID "${t.id}". Defaulting to EXPENSE.`);
             type = TransactionType.EXPENSE;
           }
           return { 
             ...t,
-            id: t.id || crypto.randomUUID(), // Ensure ID exists
-            date: new Date(t.date), // Ensure date is a Date object
-            type: type as TransactionType, // Cast to TransactionType
-            amount: Number(t.amount) || 0, // Ensure amount is a number
+            id: t.id || crypto.randomUUID(), 
+            date: new Date(t.date), 
+            type: type as TransactionType, 
+            amount: Number(t.amount) || 0, 
           };
         });
         setTransactions(
@@ -108,10 +109,19 @@ export default function HomePage() {
     handleCloseEditModal();
   };
 
+  const handlePrint = () => {
+    window.print();
+  };
 
   return (
     <div className="container mx-auto p-4 md:p-8 space-y-8">
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+      <div className="flex justify-end mb-4 no-print">
+        <Button onClick={handlePrint} variant="outline">
+          <Printer className="ms-2 h-4 w-4" />
+          حفظ كـ PDF / طباعة
+        </Button>
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start no-print">
         <div className="lg:col-span-1 space-y-8">
           <AddTransactionForm onTransactionAdded={handleAddTransaction} />
           <BalanceSummary transactions={transactions} />
@@ -133,7 +143,7 @@ export default function HomePage() {
                 setIsEditModalOpen(true);
             }
         }}>
-          <DialogContent className="sm:max-w-[425px] md:max-w-[600px]">
+          <DialogContent className="sm:max-w-[425px] md:max-w-[600px] no-print">
             <DialogHeader>
               <DialogTitle>تعديل المعاملة</DialogTitle>
               <DialogDescription>
@@ -149,6 +159,12 @@ export default function HomePage() {
           </DialogContent>
         </Dialog>
       )}
+      
+      {/* Printable Report Section - Hidden by default, shown only for print */}
+      <div className="print-only">
+        <PrintableReport transactions={transactions} />
+      </div>
     </div>
   );
 }
+
