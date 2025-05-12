@@ -120,7 +120,7 @@ export default function HomePage() {
           حفظ كـ PDF / طباعة
         </Button>
       </div>
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start no-print">
         <div className="lg:col-span-1 space-y-8 no-print">
           <AddTransactionForm onTransactionAdded={handleAddTransaction} />
           <BalanceSummary transactions={transactions} />
