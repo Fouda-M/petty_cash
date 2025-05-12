@@ -1,3 +1,4 @@
+
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -40,7 +41,7 @@ export default function AddTransactionForm({ onTransactionAdded }: AddTransactio
     resolver: zodResolver(transactionSchema),
     defaultValues: {
       description: "",
-      amount: undefined, // Default to undefined to show placeholder
+      amount: "" as unknown as number, // Initialize with empty string to make it controlled
       currency: undefined, // Default to undefined for placeholder
       date: new Date(),
     },
@@ -57,7 +58,11 @@ export default function AddTransactionForm({ onTransactionAdded }: AddTransactio
         });
         onTransactionAdded(result.data);
         form.reset();
-        form.setValue("date", new Date()); // Reset date to today
+        // Reset specific fields to their desired post-submission state
+        form.setValue("description", "");
+        form.setValue("amount", "" as unknown as number);
+        form.setValue("currency", undefined);
+        form.setValue("date", new Date());
       } else {
         toast({
           variant: "destructive",
@@ -115,7 +120,14 @@ export default function AddTransactionForm({ onTransactionAdded }: AddTransactio
                   <FormItem>
                     <FormLabel>Amount</FormLabel>
                     <FormControl>
-                      <Input type="number" placeholder="0.00" {...field} step="0.01" />
+                      <Input 
+                        type="number" 
+                        placeholder="0.00" 
+                        {...field} 
+                        step="0.01"
+                        // Ensure value is not undefined
+                        value={field.value === undefined ? '' : field.value} 
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -127,7 +139,10 @@ export default function AddTransactionForm({ onTransactionAdded }: AddTransactio
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Currency</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select 
+                      onValueChange={field.onChange} 
+                      value={field.value} // Use value instead of defaultValue for controlled component
+                    >
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select currency" />
@@ -172,3 +187,4 @@ export default function AddTransactionForm({ onTransactionAdded }: AddTransactio
 
 // Need to import Card components
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+
