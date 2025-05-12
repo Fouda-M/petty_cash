@@ -17,7 +17,7 @@ import { TransactionType } from "@/types";
 import { Currency, getCurrencyInfo, CURRENCIES_INFO, getTransactionTypeInfo } from "@/lib/constants";
 import { format } from "date-fns";
 import { arSA } from "date-fns/locale"; 
-import { ArrowUpDown, ListFilter, Trash2 } from "lucide-react";
+import { ArrowUpDown, ListFilter, Trash2, Pencil } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -30,12 +30,13 @@ import {
 interface TransactionTableProps {
   transactions: Transaction[];
   onDeleteTransaction: (id: string) => void;
+  onEditTransactionRequest: (transaction: Transaction) => void;
 }
 
 type SortKey = keyof Transaction | 'none';
 type SortDirection = 'asc' | 'desc';
 
-export default function TransactionTable({ transactions, onDeleteTransaction }: TransactionTableProps) {
+export default function TransactionTable({ transactions, onDeleteTransaction, onEditTransactionRequest }: TransactionTableProps) {
   const [sortKey, setSortKey] = React.useState<SortKey>('date');
   const [sortDirection, setSortDirection] = React.useState<SortDirection>('desc');
   const [currencyFilter, setCurrencyFilter] = React.useState<Set<Currency>>(new Set(Object.values(Currency)));
@@ -57,12 +58,19 @@ export default function TransactionTable({ transactions, onDeleteTransaction }: 
       } else {
         newSet.add(currency);
       }
+      // If all are unchecked, effectively show all (like resetting filter)
+      // Or if all are checked, it's also like showing all.
+      // For simplicity, if the set becomes empty by unchecking the last one, re-populate it to show all.
       return newSet.size === 0 ? new Set(Object.values(Currency)) : newSet;
     });
   };
   
   const sortedTransactions = React.useMemo(() => {
-    let filtered = [...transactions].filter(t => currencyFilter.size === Object.values(Currency).length || currencyFilter.has(t.currency));
+    // Filter first
+    let filtered = [...transactions].filter(t => 
+        currencyFilter.size === CURRENCIES_INFO.length || // If filter set includes all possible currencies
+        currencyFilter.has(t.currency)
+    );
 
     if (sortKey === 'none') return filtered;
     
@@ -75,7 +83,6 @@ export default function TransactionTable({ transactions, onDeleteTransaction }: 
         valB = valB.getTime();
       }
       
-      // For type, sort by the enum string value
       if (sortKey === 'type') {
          valA = a.type.toString();
          valB = b.type.toString();
@@ -189,7 +196,10 @@ export default function TransactionTable({ transactions, onDeleteTransaction }: 
                   <TableCell className="font-medium text-start">{transaction.description}</TableCell>
                   <TableCell className="text-end">{formatCurrency(transaction.amount, transaction.currency)}</TableCell>
                   <TableCell className="text-start">{transaction.currency}</TableCell>
-                  <TableCell className="text-end">
+                  <TableCell className="text-end space-x-1">
+                    <Button variant="ghost" size="icon" onClick={() => onEditTransactionRequest(transaction)} aria-label="تعديل المعاملة">
+                      <Pencil className="h-4 w-4 text-blue-500" />
+                    </Button>
                     <Button variant="ghost" size="icon" onClick={() => onDeleteTransaction(transaction.id)} aria-label="حذف المعاملة">
                       <Trash2 className="h-4 w-4 text-destructive" />
                     </Button>
