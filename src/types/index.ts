@@ -4,6 +4,7 @@ export enum TransactionType {
   EXPENSE = 'EXPENSE',
   REVENUE = 'REVENUE',
   CUSTODY_HANDOVER = 'CUSTODY_HANDOVER',
+  CUSTODY_RETURN = 'CUSTODY_RETURN', // Money returned by driver
 }
 
 export interface Transaction {
