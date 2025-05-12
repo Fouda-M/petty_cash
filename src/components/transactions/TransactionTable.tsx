@@ -1,0 +1,184 @@
+"use client";
+
+import * as React from "react";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import type { Transaction } from "@/types";
+import { Currency, getCurrencyInfo, CURRENCIES_INFO } from "@/lib/constants";
+import { format } from "date-fns";
+import { ArrowUpDown, ListFilter, Trash2 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+
+interface TransactionTableProps {
+  transactions: Transaction[];
+  onDeleteTransaction: (id: string) => void;
+}
+
+type SortKey = keyof Transaction | 'none';
+type SortDirection = 'asc' | 'desc';
+
+export default function TransactionTable({ transactions, onDeleteTransaction }: TransactionTableProps) {
+  const [sortKey, setSortKey] = React.useState<SortKey>('date');
+  const [sortDirection, setSortDirection] = React.useState<SortDirection>('desc');
+  const [currencyFilter, setCurrencyFilter] = React.useState<Set<Currency>>(new Set(Object.values(Currency)));
+
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortKey(key);
+      setSortDirection('asc');
+    }
+  };
+
+  const toggleCurrencyFilter = (currency: Currency) => {
+    setCurrencyFilter(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(currency)) {
+        newSet.delete(currency);
+      } else {
+        newSet.add(currency);
+      }
+      // Ensure at least one filter is always selected or all if empty
+      return newSet.size === 0 ? new Set(Object.values(Currency)) : newSet;
+    });
+  };
+  
+  const sortedTransactions = React.useMemo(() => {
+    let filtered = [...transactions].filter(t => currencyFilter.has(t.currency));
+
+    if (sortKey === 'none') return filtered;
+    
+    return filtered.sort((a, b) => {
+      let valA = a[sortKey as keyof Transaction];
+      let valB = b[sortKey as keyof Transaction];
+
+      if (valA instanceof Date && valB instanceof Date) {
+        valA = valA.getTime();
+        valB = valB.getTime();
+      }
+
+      if (typeof valA === 'string' && typeof valB === 'string') {
+        return sortDirection === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+      }
+      if (typeof valA === 'number' && typeof valB === 'number') {
+        return sortDirection === 'asc' ? valA - valB : valB - valA;
+      }
+      return 0;
+    });
+  }, [transactions, sortKey, sortDirection, currencyFilter]);
+
+  const formatCurrency = (amount: number, currencyCode: Currency) => {
+    const currencyInfo = getCurrencyInfo(currencyCode);
+    return `${currencyInfo?.symbol || ''}${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  };
+
+  if (transactions.length === 0) {
+    return (
+      <Card className="shadow-lg">
+        <CardHeader>
+          <CardTitle>Transactions</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-muted-foreground text-center py-8">No transactions yet. Add one to get started!</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="shadow-lg">
+      <CardHeader className="flex flex-row items-center justify-between">
+        <div>
+          <CardTitle>Transaction History</CardTitle>
+          <CardDescription>View and manage your recorded transactions.</CardDescription>
+        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm">
+              <ListFilter className="mr-2 h-4 w-4" /> Filter by Currency
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuLabel>Filter by Currency</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {CURRENCIES_INFO.map(c => (
+              <DropdownMenuCheckboxItem
+                key={c.code}
+                checked={currencyFilter.has(c.code)}
+                onCheckedChange={() => toggleCurrencyFilter(c.code)}
+              >
+                {c.name} ({c.code})
+              </DropdownMenuCheckboxItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </CardHeader>
+      <CardContent>
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead
+                  onClick={() => handleSort('date')}
+                  className="cursor-pointer hover:bg-accent"
+                >
+                  Date <ArrowUpDown className={`ml-2 h-4 w-4 inline ${sortKey === 'date' ? 'opacity-100' : 'opacity-50'}`} />
+                </TableHead>
+                <TableHead
+                  onClick={() => handleSort('description')}
+                  className="cursor-pointer hover:bg-accent"
+                >
+                  Description <ArrowUpDown className={`ml-2 h-4 w-4 inline ${sortKey === 'description' ? 'opacity-100' : 'opacity-50'}`} />
+                </TableHead>
+                <TableHead
+                  onClick={() => handleSort('amount')}
+                  className="text-right cursor-pointer hover:bg-accent"
+                >
+                  Amount <ArrowUpDown className={`ml-2 h-4 w-4 inline ${sortKey === 'amount' ? 'opacity-100' : 'opacity-50'}`} />
+                </TableHead>
+                <TableHead
+                  onClick={() => handleSort('currency')}
+                  className="cursor-pointer hover:bg-accent"
+                >
+                  Currency <ArrowUpDown className={`ml-2 h-4 w-4 inline ${sortKey === 'currency' ? 'opacity-100' : 'opacity-50'}`} />
+                </TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {sortedTransactions.map((transaction) => (
+                <TableRow key={transaction.id}>
+                  <TableCell>{format(new Date(transaction.date), "PP")}</TableCell>
+                  <TableCell className="font-medium">{transaction.description}</TableCell>
+                  <TableCell className="text-right">{formatCurrency(transaction.amount, transaction.currency)}</TableCell>
+                  <TableCell>{transaction.currency}</TableCell>
+                  <TableCell className="text-right">
+                    <Button variant="ghost" size="icon" onClick={() => onDeleteTransaction(transaction.id)} aria-label="Delete transaction">
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
