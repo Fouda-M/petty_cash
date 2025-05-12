@@ -6,6 +6,7 @@ import AddTransactionForm from "@/components/transactions/AddTransactionForm";
 import TransactionTable from "@/components/transactions/TransactionTable";
 import BalanceSummary from "@/components/transactions/BalanceSummary";
 import type { Transaction } from "@/types";
+import { TransactionType } from "@/types"; // Import TransactionType
 import { useToast } from "@/hooks/use-toast";
 
 export default function HomePage() {
@@ -21,7 +22,10 @@ export default function HomePage() {
         const parsedTransactions = JSON.parse(savedTransactions, (key, value) => {
           if (key === 'date') return new Date(value);
           return value;
-        });
+        }).map((t: Omit<Transaction, 'type'> & { type?: TransactionType }) => ({ // Handle potentially missing type
+          ...t,
+          type: t.type || TransactionType.EXPENSE, // Default to EXPENSE if type is missing
+        }));
         setTransactions(
           parsedTransactions.sort((a: Transaction, b: Transaction) => 
             new Date(b.date).getTime() - new Date(a.date).getTime()

@@ -24,8 +24,9 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { useToast } from "@/hooks/use-toast";
 import { addTransactionAction } from "@/actions/transactionActions";
 import { transactionSchema, type TransactionFormData } from "@/lib/schemas";
-import { CURRENCIES_INFO } from "@/lib/constants";
+import { CURRENCIES_INFO, TRANSACTION_TYPES_INFO, getTransactionTypeInfo } from "@/lib/constants";
 import type { Transaction } from "@/types";
+import { TransactionType } from "@/types";
 import { Loader2 } from "lucide-react";
 import * as React from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -41,12 +42,18 @@ export default function AddTransactionForm({ onTransactionAdded }: AddTransactio
   const form = useForm<TransactionFormData>({
     resolver: zodResolver(transactionSchema),
     defaultValues: {
+      type: TransactionType.EXPENSE, // Default type
       description: "",
       amount: "" as unknown as number, 
       currency: undefined, 
       date: new Date(),
     },
   });
+
+  const selectedTransactionType = form.watch("type");
+  const currentDescriptionPlaceholder = React.useMemo(() => {
+    return getTransactionTypeInfo(selectedTransactionType)?.descriptionPlaceholder || "الوصف";
+  }, [selectedTransactionType]);
 
   async function onSubmit(values: TransactionFormData) {
     setIsSubmitting(true);
@@ -55,10 +62,11 @@ export default function AddTransactionForm({ onTransactionAdded }: AddTransactio
       if (result.success && result.data) {
         toast({
           title: "تمت إضافة المعاملة",
-          description: `تم تسجيل ${result.data.description} بنجاح.`,
+          description: `تم تسجيل "${result.data.description}" بنجاح.`,
         });
         onTransactionAdded(result.data);
-        form.reset({ // Reset with default values to ensure all fields are cleared properly
+        form.reset({ 
+            type: TransactionType.EXPENSE,
             description: "",
             amount: "" as unknown as number,
             currency: undefined,
@@ -101,12 +109,40 @@ export default function AddTransactionForm({ onTransactionAdded }: AddTransactio
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             <FormField
               control={form.control}
+              name="type"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>نوع المعاملة</FormLabel>
+                  <Select 
+                    onValueChange={field.onChange} 
+                    value={field.value}
+                    dir="rtl"
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="اختر نوع المعاملة" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {TRANSACTION_TYPES_INFO.map((typeInfo) => (
+                        <SelectItem key={typeInfo.type} value={typeInfo.type}>
+                          {typeInfo.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
               name="description"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>الوصف</FormLabel>
                   <FormControl>
-                    <Input placeholder="مثال: مشتريات, راتب" {...field} />
+                    <Input placeholder={currentDescriptionPlaceholder} {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -185,4 +221,3 @@ export default function AddTransactionForm({ onTransactionAdded }: AddTransactio
     </Card>
   );
 }
-

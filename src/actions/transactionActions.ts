@@ -2,6 +2,7 @@
 
 import { transactionSchema, type TransactionFormData } from "@/lib/schemas";
 import type { Transaction } from "@/types";
+import { z } from "zod";
 
 export async function addTransactionAction(
   values: TransactionFormData
@@ -20,6 +21,7 @@ export async function addTransactionAction(
   // For now, we simulate it and return the created transaction.
   const newTransaction: Transaction = {
     id: crypto.randomUUID(),
+    type: validatedFields.data.type,
     date: validatedFields.data.date,
     description: validatedFields.data.description,
     amount: validatedFields.data.amount,

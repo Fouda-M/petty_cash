@@ -13,7 +13,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import type { Transaction } from "@/types";
-import { Currency, getCurrencyInfo, CURRENCIES_INFO } from "@/lib/constants";
+import { TransactionType } from "@/types";
+import { Currency, getCurrencyInfo, CURRENCIES_INFO, getTransactionTypeInfo } from "@/lib/constants";
 import { format } from "date-fns";
 import { arSA } from "date-fns/locale"; 
 import { ArrowUpDown, ListFilter, Trash2 } from "lucide-react";
@@ -56,16 +57,12 @@ export default function TransactionTable({ transactions, onDeleteTransaction }: 
       } else {
         newSet.add(currency);
       }
-      // If all are unchecked, effectively no filter (show all)
-      // Or if all are checked, also no filter (show all) - this logic might need adjustment based on exact requirement
-      // For now, if becomes empty, re-fill with all currencies to show all.
       return newSet.size === 0 ? new Set(Object.values(Currency)) : newSet;
     });
   };
   
   const sortedTransactions = React.useMemo(() => {
     let filtered = [...transactions].filter(t => currencyFilter.size === Object.values(Currency).length || currencyFilter.has(t.currency));
-
 
     if (sortKey === 'none') return filtered;
     
@@ -77,6 +74,13 @@ export default function TransactionTable({ transactions, onDeleteTransaction }: 
         valA = valA.getTime();
         valB = valB.getTime();
       }
+      
+      // For type, sort by the enum string value
+      if (sortKey === 'type') {
+         valA = a.type.toString();
+         valB = b.type.toString();
+      }
+
 
       if (typeof valA === 'string' && typeof valB === 'string') {
         return sortDirection === 'asc' ? valA.localeCompare(valB, 'ar') : valB.localeCompare(valA, 'ar');
@@ -91,6 +95,10 @@ export default function TransactionTable({ transactions, onDeleteTransaction }: 
   const formatCurrency = (amount: number, currencyCode: Currency) => {
     const currencyInfo = getCurrencyInfo(currencyCode);
     return `${currencyInfo?.symbol || ''}${amount.toLocaleString('ar', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  };
+
+  const getTransactionTypeName = (type: TransactionType) => {
+    return getTransactionTypeInfo(type)?.name || type;
   };
 
   if (transactions.length === 0) {
@@ -147,6 +155,12 @@ export default function TransactionTable({ transactions, onDeleteTransaction }: 
                   التاريخ <ArrowUpDown className={`me-2 h-4 w-4 inline ${sortKey === 'date' ? 'opacity-100' : 'opacity-50'}`} /> 
                 </TableHead>
                 <TableHead
+                  onClick={() => handleSort('type')}
+                  className="cursor-pointer hover:bg-accent text-start"
+                >
+                  النوع <ArrowUpDown className={`me-2 h-4 w-4 inline ${sortKey === 'type' ? 'opacity-100' : 'opacity-50'}`} /> 
+                </TableHead>
+                <TableHead
                   onClick={() => handleSort('description')}
                   className="cursor-pointer hover:bg-accent text-start"
                 >
@@ -171,6 +185,7 @@ export default function TransactionTable({ transactions, onDeleteTransaction }: 
               {sortedTransactions.map((transaction) => (
                 <TableRow key={transaction.id}>
                   <TableCell className="text-start">{format(new Date(transaction.date), "PP", { locale: arSA })}</TableCell>
+                  <TableCell className="text-start">{getTransactionTypeName(transaction.type)}</TableCell>
                   <TableCell className="font-medium text-start">{transaction.description}</TableCell>
                   <TableCell className="text-end">{formatCurrency(transaction.amount, transaction.currency)}</TableCell>
                   <TableCell className="text-start">{transaction.currency}</TableCell>
@@ -188,4 +203,3 @@ export default function TransactionTable({ transactions, onDeleteTransaction }: 
     </Card>
   );
 }
-
