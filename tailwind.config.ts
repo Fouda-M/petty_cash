@@ -1,3 +1,4 @@
+
 import type { Config } from "tailwindcss";
 import { fontFamily } from "tailwindcss/defaultTheme";
 
@@ -19,7 +20,6 @@ export default {
   	extend: {
       fontFamily: {
         sans: ["var(--font-geist-sans)", ...fontFamily.sans],
-        // mono: ["var(--font-geist-mono)", ...fontFamily.mono], // Removed as geist/font/mono is not imported
       },
   		colors: {
   			background: 'hsl(var(--background))',
@@ -52,8 +52,8 @@ export default {
   				DEFAULT: 'hsl(var(--destructive))',
   				foreground: 'hsl(var(--destructive-foreground))'
   			},
-        positive: 'hsl(var(--positive-balance-fg))', // Custom positive color
-        negative: 'hsl(var(--negative-balance-fg))', // Custom negative color
+        positive: 'hsl(var(--positive-balance-fg))', 
+        negative: 'hsl(var(--negative-balance-fg))', 
   			border: 'hsl(var(--border))',
   			input: 'hsl(var(--input))',
   			ring: 'hsl(var(--ring))',
@@ -106,7 +106,15 @@ export default {
   			'accordion-down': 'accordion-down 0.2s ease-out',
   			'accordion-up': 'accordion-up 0.2s ease-out',
         "caret-blink": "caret-blink 1.25s ease-out infinite",
-  		}
+  		},
+      textAlign: {
+        'left': 'left',
+        'right': 'right',
+        'center': 'center',
+        'justify': 'justify',
+        'start': 'start',
+        'end': 'end',
+      },
   	}
   },
   plugins: [require("tailwindcss-animate")],

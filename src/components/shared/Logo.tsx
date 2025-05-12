@@ -5,7 +5,7 @@ export default function Logo() {
     <div className="flex items-center space-x-2" data-ai-hint="logo finance">
       <WalletMinimal className="h-7 w-7 text-primary" />
       <span className="text-xl font-bold text-primary tracking-tight">
-        Currency Compass
+        بوصلة العملات
       </span>
     </div>
   );

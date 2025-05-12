@@ -1,17 +1,15 @@
 import type { Metadata } from 'next';
 import { GeistSans } from 'geist/font/sans';
-// import { GeistMono } from 'geist/font/mono'; // Removed as it's causing a build error and not explicitly used
 import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
-import Logo from '@/components/shared/Logo'; // Changed path to shared
+import Logo from '@/components/shared/Logo';
 import { cn } from '@/lib/utils';
 
-const geistSans = GeistSans; // Directly use the imported object
-// const geistMono = GeistMono; // Commented out
+const geistSans = GeistSans;
 
 export const metadata: Metadata = {
-  title: 'Currency Compass',
-  description: 'Track financial transactions with multiple currencies.',
+  title: 'بوصلة العملات',
+  description: 'تتبع المعاملات المالية بعملات متعددة.',
 };
 
 export default function RootLayout({
@@ -20,12 +18,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="ar" dir="rtl" suppressHydrationWarning>
       <body 
         className={cn(
           geistSans.variable, 
-          // geistMono.variable, // Commented out
-          "font-sans antialiased" // Use font-sans which maps to --font-geist-sans
+          "font-sans antialiased"
         )}
       >
         <div className="flex flex-col min-h-screen">
@@ -40,7 +37,7 @@ export default function RootLayout({
           <footer className="py-6 md:px-8 md:py-0 border-t">
             <div className="container flex flex-col items-center justify-center gap-4 md:h-24 md:flex-row">
               <p className="text-sm leading-loose text-center text-muted-foreground">
-                © {new Date().getFullYear()} Currency Compass. All rights reserved.
+                © {new Date().getFullYear()} بوصلة العملات. جميع الحقوق محفوظة.
               </p>
             </div>
           </footer>

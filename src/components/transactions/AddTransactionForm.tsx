@@ -24,10 +24,11 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { useToast } from "@/hooks/use-toast";
 import { addTransactionAction } from "@/actions/transactionActions";
 import { transactionSchema, type TransactionFormData } from "@/lib/schemas";
-import { CURRENCIES_INFO, Currency } from "@/lib/constants";
+import { CURRENCIES_INFO } from "@/lib/constants";
 import type { Transaction } from "@/types";
 import { Loader2 } from "lucide-react";
 import * as React from "react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 interface AddTransactionFormProps {
   onTransactionAdded: (transaction: Transaction) => void;
@@ -41,8 +42,8 @@ export default function AddTransactionForm({ onTransactionAdded }: AddTransactio
     resolver: zodResolver(transactionSchema),
     defaultValues: {
       description: "",
-      amount: "" as unknown as number, // Initialize with empty string to make it controlled
-      currency: undefined, // Default to undefined for placeholder
+      amount: "" as unknown as number, 
+      currency: undefined, 
       date: new Date(),
     },
   });
@@ -53,12 +54,11 @@ export default function AddTransactionForm({ onTransactionAdded }: AddTransactio
       const result = await addTransactionAction(values);
       if (result.success && result.data) {
         toast({
-          title: "Transaction Added",
-          description: `${result.data.description} successfully recorded.`,
+          title: "تمت إضافة المعاملة",
+          description: `تم تسجيل ${result.data.description} بنجاح.`,
         });
         onTransactionAdded(result.data);
         form.reset();
-        // Reset specific fields to their desired post-submission state
         form.setValue("description", "");
         form.setValue("amount", "" as unknown as number);
         form.setValue("currency", undefined);
@@ -66,10 +66,9 @@ export default function AddTransactionForm({ onTransactionAdded }: AddTransactio
       } else {
         toast({
           variant: "destructive",
-          title: "Error Adding Transaction",
-          description: result.error || "An unknown error occurred.",
+          title: "خطأ في إضافة المعاملة",
+          description: result.error || "حدث خطأ غير معروف.",
         });
-         // Set form errors if available
         if (result.errors) {
           result.errors.forEach((err) => {
             form.setError(err.path[0] as keyof TransactionFormData, {
@@ -82,8 +81,8 @@ export default function AddTransactionForm({ onTransactionAdded }: AddTransactio
     } catch (error) {
       toast({
         variant: "destructive",
-        title: "Submission Error",
-        description: "Could not submit the form. Please try again.",
+        title: "خطأ في الإرسال",
+        description: "لم يتمكن من إرسال النموذج. يرجى المحاولة مرة أخرى.",
       });
     } finally {
       setIsSubmitting(false);
@@ -93,8 +92,8 @@ export default function AddTransactionForm({ onTransactionAdded }: AddTransactio
   return (
     <Card className="shadow-lg">
       <CardHeader>
-        <CardTitle>Add New Transaction</CardTitle>
-        <CardDescription>Enter the details of your financial transaction.</CardDescription>
+        <CardTitle>إضافة معاملة جديدة</CardTitle>
+        <CardDescription>أدخل تفاصيل معاملتك المالية.</CardDescription>
       </CardHeader>
       <CardContent>
         <Form {...form}>
@@ -104,9 +103,9 @@ export default function AddTransactionForm({ onTransactionAdded }: AddTransactio
               name="description"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Description</FormLabel>
+                  <FormLabel>الوصف</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g., Groceries, Salary" {...field} />
+                    <Input placeholder="مثال: مشتريات, راتب" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -118,14 +117,13 @@ export default function AddTransactionForm({ onTransactionAdded }: AddTransactio
                 name="amount"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Amount</FormLabel>
+                    <FormLabel>المبلغ</FormLabel>
                     <FormControl>
                       <Input 
                         type="number" 
                         placeholder="0.00" 
                         {...field} 
                         step="0.01"
-                        // Ensure value is not undefined
                         value={field.value === undefined ? '' : field.value} 
                       />
                     </FormControl>
@@ -138,20 +136,20 @@ export default function AddTransactionForm({ onTransactionAdded }: AddTransactio
                 name="currency"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Currency</FormLabel>
+                    <FormLabel>العملة</FormLabel>
                     <Select 
                       onValueChange={field.onChange} 
-                      value={field.value} // Use value instead of defaultValue for controlled component
+                      value={field.value} 
                     >
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="Select currency" />
+                          <SelectValue placeholder="اختر العملة" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
                         {CURRENCIES_INFO.map((currencyInfo) => (
                           <SelectItem key={currencyInfo.code} value={currencyInfo.code}>
-                            {currencyInfo.code} ({currencyInfo.symbol})
+                            {currencyInfo.name} ({currencyInfo.symbol}) {/* Display name and symbol */}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -166,7 +164,7 @@ export default function AddTransactionForm({ onTransactionAdded }: AddTransactio
               name="date"
               render={({ field }) => (
                 <FormItem className="flex flex-col">
-                  <FormLabel>Date</FormLabel>
+                  <FormLabel>التاريخ</FormLabel>
                   <FormControl>
                      <DatePicker date={field.value} setDate={field.onChange} />
                   </FormControl>
@@ -175,8 +173,8 @@ export default function AddTransactionForm({ onTransactionAdded }: AddTransactio
               )}
             />
             <Button type="submit" className="w-full" disabled={isSubmitting}>
-              {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Add Transaction
+              {isSubmitting && <Loader2 className="ml-2 h-4 w-4 animate-spin" />} {/* Changed mr-2 to ml-2 */}
+              إضافة معاملة
             </Button>
           </form>
         </Form>
@@ -184,7 +182,3 @@ export default function AddTransactionForm({ onTransactionAdded }: AddTransactio
     </Card>
   );
 }
-
-// Need to import Card components
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-

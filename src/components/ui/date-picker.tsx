@@ -1,7 +1,9 @@
+
 "use client"
 
 import * as React from "react"
 import { format } from "date-fns"
+import { arSA } from "date-fns/locale"; // Import Arabic locale
 import { Calendar as CalendarIcon } from "lucide-react"
 
 import { cn } from "@/lib/utils"
@@ -26,16 +28,17 @@ export function DatePicker({ date, setDate, disabled }: DatePickerProps) {
         <Button
           variant={"outline"}
           className={cn(
-            "w-full justify-start text-left font-normal",
+            "w-full justify-start text-start font-normal", // Changed text-left to text-start
             !date && "text-muted-foreground"
           )}
         >
-          <CalendarIcon className="mr-2 h-4 w-4" />
-          {date ? format(date, "PPP") : <span>Pick a date</span>}
+          <CalendarIcon className="ml-2 h-4 w-4" /> {/* Changed mr-2 to ml-2 */}
+          {date ? format(date, "PPP", { locale: arSA }) : <span>اختر تاريخًا</span>}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-auto p-0">
+      <PopoverContent className="w-auto p-0" dir="ltr"> {/* Explicitly set dir to ltr for calendar popover if needed for date-fns calendar */}
         <Calendar
+          locale={arSA} // Pass locale to Calendar component
           mode="single"
           selected={date}
           onSelect={setDate}
