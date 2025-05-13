@@ -43,5 +43,6 @@ export interface TripDetails {
   tripStartDate: Date;
   tripEndDate: Date;
   destinationType: DestinationType;
+  cityName?: string; // Added cityName
   countryName?: string;
 }

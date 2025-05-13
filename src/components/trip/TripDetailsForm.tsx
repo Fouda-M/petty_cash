@@ -25,6 +25,7 @@ import { Loader2 } from "lucide-react";
 const getBaseTripFormValues = (): Omit<TripDetailsFormData, 'tripStartDate' | 'tripEndDate'> & { tripStartDate?: Date, tripEndDate?: Date } => ({
     driverName: "",
     destinationType: DestinationType.INTERNAL,
+    cityName: "",
     countryName: "",
     tripStartDate: undefined,
     tripEndDate: undefined,
@@ -43,13 +44,18 @@ export default function TripDetailsForm() {
   React.useEffect(() => {
     // Set dates to new Date() client-side after initial render
     // to avoid hydration mismatch.
+    const currentValues = form.getValues();
     form.reset({
         ...getBaseTripFormValues(),
-        tripStartDate: new Date(),
-        tripEndDate: new Date(),
+        driverName: currentValues.driverName, // Preserve existing values if any during reset
+        destinationType: currentValues.destinationType,
+        cityName: currentValues.cityName,
+        countryName: currentValues.countryName,
+        tripStartDate: currentValues.tripStartDate || new Date(),
+        tripEndDate: currentValues.tripEndDate || new Date(),
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.reset]);
+  }, [form.reset]); // form.getValues removed from deps to avoid potential infinite loops
 
 
   const destinationType = form.watch("destinationType");
@@ -129,18 +135,25 @@ export default function TripDetailsForm() {
               name="destinationType"
               render={({ field }) => (
                 <FormItem className="space-y-3">
-                  <FormLabel>البلد المتجه إليها</FormLabel>
+                  <FormLabel>الوجهة</FormLabel>
                   <FormControl>
                     <RadioGroup
-                      onValueChange={field.onChange}
-                      defaultValue={field.value}
+                      onValueChange={(value) => {
+                        field.onChange(value);
+                        if (value === DestinationType.INTERNAL) {
+                          form.setValue("countryName", ""); // Clear country name if internal
+                        } else {
+                          form.setValue("cityName", ""); // Clear city name if external
+                        }
+                      }}
+                      value={field.value}
                       className="flex flex-col space-y-1 md:flex-row md:space-y-0 md:space-x-4 md:space-x-reverse" // RTL space-x-reverse
                     >
                       <FormItem className="flex items-center space-x-2 space-x-reverse">
                         <FormControl>
                           <RadioGroupItem value={DestinationType.INTERNAL} />
                         </FormControl>
-                        <FormLabel className="font-normal">داخلي (داخل مصر)</FormLabel>
+                        <FormLabel className="font-normal">داخل البلاد</FormLabel>
                       </FormItem>
                       <FormItem className="flex items-center space-x-2 space-x-reverse">
                         <FormControl>
@@ -155,13 +168,29 @@ export default function TripDetailsForm() {
               )}
             />
 
+            {destinationType === DestinationType.INTERNAL && (
+              <FormField
+                control={form.control}
+                name="cityName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>اسم المدينة</FormLabel>
+                    <FormControl>
+                      <Input placeholder="ادخل اسم المدينة" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+
             {destinationType === DestinationType.EXTERNAL && (
               <FormField
                 control={form.control}
                 name="countryName"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>اسم البلد (إذا كانت الرحلة خارجية)</FormLabel>
+                    <FormLabel>اسم البلد</FormLabel>
                     <FormControl>
                       <Input placeholder="ادخل اسم البلد" {...field} />
                     </FormControl>

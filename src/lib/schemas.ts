@@ -18,6 +18,7 @@ export const tripDetailsSchema = z.object({
   tripStartDate: z.date({ required_error: "تاريخ بدء الرحلة مطلوب." }),
   tripEndDate: z.date({ required_error: "تاريخ نهاية الرحلة مطلوب." }),
   destinationType: z.nativeEnum(DestinationType, { errorMap: () => ({ message: "يرجى اختيار نوع الوجهة."}) }),
+  cityName: z.string().optional(),
   countryName: z.string().optional(),
 }).refine(data => {
   if (data.tripEndDate && data.tripStartDate) {
@@ -35,6 +36,15 @@ export const tripDetailsSchema = z.object({
 }, {
   message: "اسم البلد مطلوب للوجهات الخارجية.",
   path: ["countryName"],
+}).refine(data => {
+  if (data.destinationType === DestinationType.INTERNAL) {
+    return !!data.cityName && data.cityName.trim().length > 0;
+  }
+  return true;
+}, {
+  message: "اسم المدينة مطلوب للوجهات الداخلية.",
+  path: ["cityName"],
 });
 
 export type TripDetailsFormData = z.infer<typeof tripDetailsSchema>;
+
