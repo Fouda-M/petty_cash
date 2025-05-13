@@ -5,7 +5,7 @@ import * as React from "react";
 import type { Transaction } from "@/types";
 import { TransactionType, type ExchangeRates } from "@/types";
 import { Currency, CURRENCIES_INFO, CONVERSION_TARGET_CURRENCIES, getCurrencyInfo } from "@/lib/constants";
-import { convertCurrency } from "@/lib/exchangeRates";
+import { convertCurrency, getExchangeRate } from "@/lib/exchangeRates";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { arSA } from "date-fns/locale";
@@ -153,7 +153,12 @@ export default function PrintableReport({ transactions }: PrintableReportProps) 
           return (
             <div key={index} className="flex justify-between items-center py-0.5">
               <span className="whitespace-nowrap">{prefix} {getCurrencyInfo(detail.originalCurrency)?.name || detail.originalCurrency}: {formatCurrencyDisplayPrint(detail.originalAmount, detail.originalCurrency, 'neutral')}</span>
-              <span className="whitespace-nowrap text-end">(يعادل {formatCurrencyDisplayPrint(detail.convertedAmount, targetCurrency, 'neutral')})</span>
+              <span className="whitespace-nowrap text-end">
+                (يعادل {formatCurrencyDisplayPrint(detail.convertedAmount, targetCurrency, 'neutral')}{' '}
+                <span className="text-xs text-gray-500" dir="ltr">
+                  @{getExchangeRate(detail.originalCurrency, targetCurrency).toFixed(4)}
+                </span>)
+              </span>
             </div>
           );
         })}
@@ -181,7 +186,12 @@ export default function PrintableReport({ transactions }: PrintableReportProps) 
         {Array.from(aggregated.entries()).map(([originalCurrency, totals], index) => (
           <div key={index} className="flex justify-between items-center py-0.5">
             <span className="whitespace-nowrap">↳ منها بالـ{getCurrencyInfo(originalCurrency)?.name || originalCurrency}: {formatCurrencyDisplayPrint(totals.totalOriginal, originalCurrency, 'neutral')}</span>
-            <span className="whitespace-nowrap text-end">(يعادل {formatCurrencyDisplayPrint(totals.totalConverted, targetCurrency, 'neutral')})</span>
+            <span className="whitespace-nowrap text-end">
+              (يعادل {formatCurrencyDisplayPrint(totals.totalConverted, targetCurrency, 'neutral')}{' '}
+              <span className="text-xs text-gray-500" dir="ltr">
+                @{getExchangeRate(originalCurrency, targetCurrency).toFixed(4)}
+              </span>)
+            </span>
           </div>
         ))}
       </div>
@@ -317,3 +327,4 @@ export default function PrintableReport({ transactions }: PrintableReportProps) 
     </div>
   );
 }
+

@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import type { Transaction } from "@/types";
 import { TransactionType } from "@/types";
 import { Currency, CONVERSION_TARGET_CURRENCIES, getCurrencyInfo } from "@/lib/constants";
-import { convertCurrency } from "@/lib/exchangeRates";
+import { convertCurrency, getExchangeRate } from "@/lib/exchangeRates";
 import { cn } from "@/lib/utils";
 import { Wallet, Scale, HandCoins, Receipt, ShoppingCart, Landmark } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
@@ -143,7 +143,12 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
           return (
             <div key={index} className="flex justify-between items-center py-0.5">
               <span className="whitespace-nowrap">{prefix} {getCurrencyInfo(detail.originalCurrency)?.name || detail.originalCurrency}: {formatCurrencyDisplay(detail.originalAmount, detail.originalCurrency, 'neutral')}</span>
-              <span className="whitespace-nowrap text-end">(يعادل {formatCurrencyDisplay(detail.convertedAmount, targetCurrency, 'neutral')})</span>
+              <span className="whitespace-nowrap text-end">
+                (يعادل {formatCurrencyDisplay(detail.convertedAmount, targetCurrency, 'neutral')}{' '}
+                <span className="text-xs text-muted-foreground/70" dir="ltr">
+                  @{getExchangeRate(detail.originalCurrency, targetCurrency).toFixed(4)}
+                </span>)
+              </span>
             </div>
           );
         })}
@@ -179,7 +184,10 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
               ↳ منها بالـ{getCurrencyInfo(originalCurrency)?.name || originalCurrency}: {formatCurrencyDisplay(totals.totalOriginal, originalCurrency, 'neutral')}
             </span>
             <span className="whitespace-nowrap text-end">
-              (يعادل {formatCurrencyDisplay(totals.totalConverted, targetCurrency, 'neutral')})
+              (يعادل {formatCurrencyDisplay(totals.totalConverted, targetCurrency, 'neutral')}{' '}
+              <span className="text-xs text-muted-foreground/70" dir="ltr">
+                @{getExchangeRate(originalCurrency, targetCurrency).toFixed(4)}
+              </span>)
             </span>
           </div>
         ))}
