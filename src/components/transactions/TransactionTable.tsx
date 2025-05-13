@@ -1,7 +1,7 @@
-
 "use client";
 
 import * as React from "react";
+import { useForm } from "react-hook-form"; // Import useForm
 import {
   Table,
   TableBody,
@@ -36,8 +36,9 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { DatePicker } from "@/components/ui/date-picker"; 
-import { FormItem, FormLabel } from "@/components/ui/form"; // Using FormItem and FormLabel for consistent styling
+import { DatePicker } from "@/components/ui/date-picker";
+// Import Form, FormField, FormItem, FormLabel
+import { Form, FormField, FormItem, FormLabel } from "@/components/ui/form";
 
 interface TransactionTableProps {
   transactions: Transaction[];
@@ -51,7 +52,7 @@ type SortDirection = 'asc' | 'desc';
 export default function TransactionTable({ transactions, onDeleteTransaction, onEditTransactionRequest }: TransactionTableProps) {
   const [sortKey, setSortKey] = React.useState<SortKey>('date');
   const [sortDirection, setSortDirection] = React.useState<SortDirection>('desc');
-  
+
   // Filter states
   const [isFilterDialogOpen, setIsFilterDialogOpen] = React.useState(false);
   const [dateFilterFrom, setDateFilterFrom] = React.useState<Date | undefined>(undefined);
@@ -61,6 +62,9 @@ export default function TransactionTable({ transactions, onDeleteTransaction, on
   const [amountMinFilter, setAmountMinFilter] = React.useState<number | undefined>(undefined);
   const [amountMaxFilter, setAmountMaxFilter] = React.useState<number | undefined>(undefined);
   const [currencyFilter, setCurrencyFilter] = React.useState<Set<Currency>>(new Set());
+
+  // Initialize a form for the filter dialog (primarily for context for FormLabel)
+  const filterForm = useForm();
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -103,17 +107,14 @@ export default function TransactionTable({ transactions, onDeleteTransaction, on
     setAmountMinFilter(undefined);
     setAmountMaxFilter(undefined);
     setCurrencyFilter(new Set());
-    // setIsFilterDialogOpen(false); // Optionally close dialog on clear
   };
 
   const filteredAndSortedTransactions = React.useMemo(() => {
     let filtered = [...transactions].map(t => ({
       ...t,
-      // Ensure date is a Date object for consistent comparison
-      date: typeof t.date === 'string' ? parseISO(t.date) : t.date 
+      date: typeof t.date === 'string' ? parseISO(t.date) : t.date
     }));
 
-    // Apply date filter
     if (dateFilterFrom) {
       const fromDate = new Date(dateFilterFrom);
       fromDate.setHours(0, 0, 0, 0);
@@ -125,17 +126,14 @@ export default function TransactionTable({ transactions, onDeleteTransaction, on
       filtered = filtered.filter(t => t.date <= toDate);
     }
 
-    // Apply type filter
     if (typeFilter.size > 0) {
       filtered = filtered.filter(t => typeFilter.has(t.type));
     }
-    
-    // Apply description filter
+
     if (descriptionFilter.trim() !== "") {
       filtered = filtered.filter(t => t.description.toLowerCase().includes(descriptionFilter.toLowerCase()));
     }
 
-    // Apply amount filter
     if (amountMinFilter !== undefined) {
       filtered = filtered.filter(t => t.amount >= amountMinFilter);
     }
@@ -143,14 +141,12 @@ export default function TransactionTable({ transactions, onDeleteTransaction, on
       filtered = filtered.filter(t => t.amount <= amountMaxFilter);
     }
 
-    // Apply currency filter
     if (currencyFilter.size > 0) {
       filtered = filtered.filter(t => currencyFilter.has(t.currency));
     }
 
-    // Apply sorting
     if (sortKey === 'none') return filtered;
-    
+
     return filtered.sort((a, b) => {
       let valA = a[sortKey as keyof Transaction];
       let valB = b[sortKey as keyof Transaction];
@@ -159,10 +155,10 @@ export default function TransactionTable({ transactions, onDeleteTransaction, on
         valA = valA.getTime();
         valB = valB.getTime();
       }
-      
+
       if (sortKey === 'type') {
-         valA = a.type.toString();
-         valB = b.type.toString();
+        valA = a.type.toString();
+        valB = b.type.toString();
       }
 
       if (typeof valA === 'string' && typeof valB === 'string') {
@@ -207,7 +203,7 @@ export default function TransactionTable({ transactions, onDeleteTransaction, on
         <Dialog open={isFilterDialogOpen} onOpenChange={setIsFilterDialogOpen}>
           <DialogTrigger asChild>
             <Button variant="outline" size="sm">
-              <FilterIcon className="ms-2 h-4 w-4" /> 
+              <FilterIcon className="ms-2 h-4 w-4" />
               تصفية / فرز
             </Button>
           </DialogTrigger>
@@ -218,111 +214,155 @@ export default function TransactionTable({ transactions, onDeleteTransaction, on
                 قم بتطبيق الفلاتر لعرض معاملات محددة.
               </DialogDescription>
             </DialogHeader>
-            <div className="grid gap-4 py-4 max-h-[60vh] overflow-y-auto px-2">
-              {/* Date Filter */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <FormItem>
-                  <FormLabel>من تاريخ</FormLabel>
-                  <DatePicker date={dateFilterFrom} setDate={setDateFilterFrom} />
-                </FormItem>
-                <FormItem>
-                  <FormLabel>إلى تاريخ</FormLabel>
-                  <DatePicker date={dateFilterTo} setDate={setDateFilterTo} />
-                </FormItem>
-              </div>
+            <Form {...filterForm}>
+              <div className="grid gap-4 py-4 max-h-[60vh] overflow-y-auto px-2">
+                {/* Date Filter */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <FormField
+                    control={filterForm.control}
+                    name="dateFilterFrom"
+                    render={() => (
+                      <FormItem>
+                        <FormLabel>من تاريخ</FormLabel>
+                        <DatePicker date={dateFilterFrom} setDate={setDateFilterFrom} />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={filterForm.control}
+                    name="dateFilterTo"
+                    render={() => (
+                      <FormItem>
+                        <FormLabel>إلى تاريخ</FormLabel>
+                        <DatePicker date={dateFilterTo} setDate={setDateFilterTo} />
+                      </FormItem>
+                    )}
+                  />
+                </div>
 
-              {/* Type Filter */}
-              <FormItem>
-                <FormLabel>نوع المعاملة</FormLabel>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" className="w-full justify-between text-start">
-                      <span>
-                        {typeFilter.size === 0
-                          ? "جميع الأنواع"
-                          : `${typeFilter.size} أنواع مختارة`}
-                      </span>
-                      <ChevronDown className="h-4 w-4 opacity-50" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" className="w-[var(--radix-dropdown-menu-trigger-width)] max-h-60 overflow-y-auto">
-                    <DropdownMenuLabel>اختر الأنواع</DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    {TRANSACTION_TYPES_INFO.map(typeInfo => (
-                      <DropdownMenuCheckboxItem
-                        key={typeInfo.type}
-                        checked={typeFilter.has(typeInfo.type)}
-                        onCheckedChange={() => toggleTypeFilterItem(typeInfo.type)}
-                      >
-                        {typeInfo.name}
-                      </DropdownMenuCheckboxItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </FormItem>
-
-              {/* Description Filter */}
-              <FormItem>
-                <FormLabel>الوصف</FormLabel>
-                <Input
-                  placeholder="بحث بالوصف..."
-                  value={descriptionFilter}
-                  onChange={(e) => setDescriptionFilter(e.target.value)}
+                {/* Type Filter */}
+                <FormField
+                  control={filterForm.control}
+                  name="typeFilter"
+                  render={() => (
+                    <FormItem>
+                      <FormLabel>نوع المعاملة</FormLabel>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="outline" className="w-full justify-between text-start">
+                            <span>
+                              {typeFilter.size === 0
+                                ? "جميع الأنواع"
+                                : `${typeFilter.size} أنواع مختارة`}
+                            </span>
+                            <ChevronDown className="h-4 w-4 opacity-50" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" className="w-[var(--radix-dropdown-menu-trigger-width)] max-h-60 overflow-y-auto">
+                          <DropdownMenuLabel>اختر الأنواع</DropdownMenuLabel>
+                          <DropdownMenuSeparator />
+                          {TRANSACTION_TYPES_INFO.map(typeInfo => (
+                            <DropdownMenuCheckboxItem
+                              key={typeInfo.type}
+                              checked={typeFilter.has(typeInfo.type)}
+                              onCheckedChange={() => toggleTypeFilterItem(typeInfo.type)}
+                            >
+                              {typeInfo.name}
+                            </DropdownMenuCheckboxItem>
+                          ))}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </FormItem>
+                  )}
                 />
-              </FormItem>
 
-              {/* Amount Filter */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <FormItem>
-                  <FormLabel>أقل مبلغ</FormLabel>
-                  <Input
-                    type="number"
-                    placeholder="0.00"
-                    value={amountMinFilter === undefined ? '' : String(amountMinFilter)}
-                    onChange={(e) => setAmountMinFilter(e.target.value === '' ? undefined : parseFloat(e.target.value))}
+                {/* Description Filter */}
+                <FormField
+                  control={filterForm.control}
+                  name="descriptionFilter"
+                  render={() => (
+                    <FormItem>
+                      <FormLabel>الوصف</FormLabel>
+                      <Input
+                        placeholder="بحث بالوصف..."
+                        value={descriptionFilter}
+                        onChange={(e) => setDescriptionFilter(e.target.value)}
+                      />
+                    </FormItem>
+                  )}
+                />
+
+                {/* Amount Filter */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <FormField
+                    control={filterForm.control}
+                    name="amountMinFilter"
+                    render={() => (
+                      <FormItem>
+                        <FormLabel>أقل مبلغ</FormLabel>
+                        <Input
+                          type="number"
+                          placeholder="0.00"
+                          value={amountMinFilter === undefined ? '' : String(amountMinFilter)}
+                          onChange={(e) => setAmountMinFilter(e.target.value === '' ? undefined : parseFloat(e.target.value))}
+                        />
+                      </FormItem>
+                    )}
                   />
-                </FormItem>
-                <FormItem>
-                  <FormLabel>أقصى مبلغ</FormLabel>
-                  <Input
-                    type="number"
-                    placeholder="1000.00"
-                    value={amountMaxFilter === undefined ? '' : String(amountMaxFilter)}
-                    onChange={(e) => setAmountMaxFilter(e.target.value === '' ? undefined : parseFloat(e.target.value))}
+                  <FormField
+                    control={filterForm.control}
+                    name="amountMaxFilter"
+                    render={() => (
+                      <FormItem>
+                        <FormLabel>أقصى مبلغ</FormLabel>
+                        <Input
+                          type="number"
+                          placeholder="1000.00"
+                          value={amountMaxFilter === undefined ? '' : String(amountMaxFilter)}
+                          onChange={(e) => setAmountMaxFilter(e.target.value === '' ? undefined : parseFloat(e.target.value))}
+                        />
+                      </FormItem>
+                    )}
                   />
-                </FormItem>
+                </div>
+
+                {/* Currency Filter */}
+                <FormField
+                  control={filterForm.control}
+                  name="currencyFilter"
+                  render={() => (
+                    <FormItem>
+                      <FormLabel>العملة</FormLabel>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="outline" className="w-full justify-between text-start">
+                            <span>
+                              {currencyFilter.size === 0
+                                ? "جميع العملات"
+                                : `${currencyFilter.size} عملات مختارة`}
+                            </span>
+                            <ChevronDown className="h-4 w-4 opacity-50" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" className="w-[var(--radix-dropdown-menu-trigger-width)] max-h-60 overflow-y-auto">
+                          <DropdownMenuLabel>اختر العملات</DropdownMenuLabel>
+                          <DropdownMenuSeparator />
+                          {CURRENCIES_INFO.map(currencyInfo => (
+                            <DropdownMenuCheckboxItem
+                              key={currencyInfo.code}
+                              checked={currencyFilter.has(currencyInfo.code)}
+                              onCheckedChange={() => toggleCurrencyFilterItem(currencyInfo.code)}
+                            >
+                              {currencyInfo.name} ({currencyInfo.symbol})
+                            </DropdownMenuCheckboxItem>
+                          ))}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </FormItem>
+                  )}
+                />
               </div>
-
-              {/* Currency Filter */}
-              <FormItem>
-                <FormLabel>العملة</FormLabel>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                     <Button variant="outline" className="w-full justify-between text-start">
-                        <span>
-                        {currencyFilter.size === 0
-                            ? "جميع العملات"
-                            : `${currencyFilter.size} عملات مختارة`}
-                        </span>
-                        <ChevronDown className="h-4 w-4 opacity-50" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" className="w-[var(--radix-dropdown-menu-trigger-width)] max-h-60 overflow-y-auto">
-                    <DropdownMenuLabel>اختر العملات</DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    {CURRENCIES_INFO.map(currencyInfo => (
-                      <DropdownMenuCheckboxItem
-                        key={currencyInfo.code}
-                        checked={currencyFilter.has(currencyInfo.code)}
-                        onCheckedChange={() => toggleCurrencyFilterItem(currencyInfo.code)}
-                      >
-                        {currencyInfo.name} ({currencyInfo.symbol})
-                      </DropdownMenuCheckboxItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </FormItem>
-            </div>
+            </Form>
             <DialogFooter>
               <Button variant="outline" onClick={handleClearFilters}>مسح الفلاتر</Button>
               <Button onClick={() => setIsFilterDialogOpen(false)}>تطبيق</Button>
@@ -339,31 +379,31 @@ export default function TransactionTable({ transactions, onDeleteTransaction, on
                   onClick={() => handleSort('date')}
                   className="cursor-pointer hover:bg-accent text-start whitespace-nowrap"
                 >
-                  التاريخ <ArrowUpDown className={`me-2 h-4 w-4 inline ${sortKey === 'date' ? 'opacity-100' : 'opacity-50'}`} /> 
+                  التاريخ <ArrowUpDown className={`me-2 h-4 w-4 inline ${sortKey === 'date' ? 'opacity-100' : 'opacity-50'}`} />
                 </TableHead>
                 <TableHead
                   onClick={() => handleSort('type')}
                   className="cursor-pointer hover:bg-accent text-start whitespace-nowrap"
                 >
-                  النوع <ArrowUpDown className={`me-2 h-4 w-4 inline ${sortKey === 'type' ? 'opacity-100' : 'opacity-50'}`} /> 
+                  النوع <ArrowUpDown className={`me-2 h-4 w-4 inline ${sortKey === 'type' ? 'opacity-100' : 'opacity-50'}`} />
                 </TableHead>
                 <TableHead
                   onClick={() => handleSort('description')}
                   className="cursor-pointer hover:bg-accent text-start"
                 >
-                  الوصف <ArrowUpDown className={`me-2 h-4 w-4 inline ${sortKey === 'description' ? 'opacity-100' : 'opacity-50'}`} /> 
+                  الوصف <ArrowUpDown className={`me-2 h-4 w-4 inline ${sortKey === 'description' ? 'opacity-100' : 'opacity-50'}`} />
                 </TableHead>
                 <TableHead
                   onClick={() => handleSort('amount')}
                   className="text-end cursor-pointer hover:bg-accent whitespace-nowrap"
                 >
-                  المبلغ <ArrowUpDown className={`me-2 h-4 w-4 inline ${sortKey === 'amount' ? 'opacity-100' : 'opacity-50'}`} /> 
+                  المبلغ <ArrowUpDown className={`me-2 h-4 w-4 inline ${sortKey === 'amount' ? 'opacity-100' : 'opacity-50'}`} />
                 </TableHead>
                 <TableHead
                   onClick={() => handleSort('currency')}
                   className="cursor-pointer hover:bg-accent text-start whitespace-nowrap"
                 >
-                  العملة <ArrowUpDown className={`me-2 h-4 w-4 inline ${sortKey === 'currency' ? 'opacity-100' : 'opacity-50'}`} /> 
+                  العملة <ArrowUpDown className={`me-2 h-4 w-4 inline ${sortKey === 'currency' ? 'opacity-100' : 'opacity-50'}`} />
                 </TableHead>
                 <TableHead className="text-end whitespace-nowrap">الإجراءات</TableHead>
               </TableRow>
@@ -386,7 +426,7 @@ export default function TransactionTable({ transactions, onDeleteTransaction, on
                   </TableCell>
                 </TableRow>
               ))}
-               {filteredAndSortedTransactions.length === 0 && (
+              {filteredAndSortedTransactions.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
                     لا توجد معاملات تطابق معايير التصفية الحالية.
@@ -400,4 +440,3 @@ export default function TransactionTable({ transactions, onDeleteTransaction, on
     </Card>
   );
 }
-
