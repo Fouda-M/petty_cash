@@ -11,25 +11,16 @@
  */
 
 import {ai} from '@/ai/genkit';
-import {z} from 'genkit';
+// import {z} from 'genkit'; // z is part of genkit, but direct import is also common.
+import { 
+    SummarizeTransactionsInputSchema, 
+    SummarizeTransactionsOutputSchema,
+    type SummarizeTransactionsInput,
+    type SummarizeTransactionsOutput
+} from '@/ai/schemas';
 
-const SummarizeTransactionsInputSchema = z.object({
-  transactionHistory: z
-    .string()
-    .describe(
-      'A string containing the transaction history, including dates, amounts, and currencies.'
-    ),
-});
-export type SummarizeTransactionsInput = z.infer<typeof SummarizeTransactionsInputSchema>;
-
-const SummarizeTransactionsOutputSchema = z.object({
-  summary: z
-    .string()
-    .describe(
-      'A summary of the users spending habits, highlighting key trends and patterns.'
-    ),
-});
-export type SummarizeTransactionsOutput = z.infer<typeof SummarizeTransactionsOutputSchema>;
+// Export types that were previously defined here, now imported from ai/schemas.ts
+export type { SummarizeTransactionsInput, SummarizeTransactionsOutput };
 
 export async function summarizeTransactions(
   input: SummarizeTransactionsInput
@@ -39,8 +30,8 @@ export async function summarizeTransactions(
 
 const summarizeTransactionsPrompt = ai.definePrompt({
   name: 'summarizeTransactionsPrompt',
-  input: {schema: SummarizeTransactionsInputSchema},
-  output: {schema: SummarizeTransactionsOutputSchema},
+  input: { schema: SummarizeTransactionsInputSchema }, // Use imported schema
+  output: { schema: SummarizeTransactionsOutputSchema }, // Use imported schema
   prompt: `You are a personal finance expert. Please analyze the following transaction history and provide a summary of the user\'s spending habits, highlighting key trends and patterns.
 
 Transaction History:
@@ -50,8 +41,8 @@ Transaction History:
 const summarizeTransactionsFlow = ai.defineFlow(
   {
     name: 'summarizeTransactionsFlow',
-    inputSchema: SummarizeTransactionsInputSchema,
-    outputSchema: SummarizeTransactionsOutputSchema,
+    inputSchema: SummarizeTransactionsInputSchema, // Use imported schema
+    outputSchema: SummarizeTransactionsOutputSchema, // Use imported schema
   },
   async input => {
     const {output} = await summarizeTransactionsPrompt(input);

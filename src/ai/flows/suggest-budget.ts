@@ -9,21 +9,17 @@
  */
 
 import {ai} from '@/ai/genkit';
-import {z} from 'genkit';
+// Zod import from 'genkit' might be fine, but direct import is also common.
+// import {z} from 'genkit'; 
+import { 
+    SuggestBudgetInputSchema, 
+    SuggestBudgetOutputSchema,
+    type SuggestBudgetInput,
+    type SuggestBudgetOutput
+} from '@/ai/schemas';
 
-const SuggestBudgetInputSchema = z.object({
-  transactionHistory: z
-    .string()
-    .describe('A string containing the user transaction history.'),
-  income: z.number().describe('The user monthly income.'),
-  financialGoals: z.string().describe('The user financial goals.'),
-});
-export type SuggestBudgetInput = z.infer<typeof SuggestBudgetInputSchema>;
-
-const SuggestBudgetOutputSchema = z.object({
-  suggestedBudget: z.string().describe('The suggested budget plan.'),
-});
-export type SuggestBudgetOutput = z.infer<typeof SuggestBudgetOutputSchema>;
+// Export types that were previously defined here, now imported from ai/schemas.ts
+export type { SuggestBudgetInput, SuggestBudgetOutput };
 
 export async function suggestBudget(input: SuggestBudgetInput): Promise<SuggestBudgetOutput> {
   return suggestBudgetFlow(input);
@@ -31,8 +27,8 @@ export async function suggestBudget(input: SuggestBudgetInput): Promise<SuggestB
 
 const prompt = ai.definePrompt({
   name: 'suggestBudgetPrompt',
-  input: {schema: SuggestBudgetInputSchema},
-  output: {schema: SuggestBudgetOutputSchema},
+  input: { schema: SuggestBudgetInputSchema }, // Use imported schema
+  output: { schema: SuggestBudgetOutputSchema }, // Use imported schema
   prompt: `You are a personal finance advisor. Analyze the user's transaction history, income, and financial goals to suggest a budget plan.
 
 Transaction History: {{{transactionHistory}}}
@@ -40,14 +36,14 @@ Income: {{{income}}}
 Financial Goals: {{{financialGoals}}}
 
 Suggest a detailed budget plan:
-`, // Removed the erroneous backticks here
+`,
 });
 
 const suggestBudgetFlow = ai.defineFlow(
   {
     name: 'suggestBudgetFlow',
-    inputSchema: SuggestBudgetInputSchema,
-    outputSchema: SuggestBudgetOutputSchema,
+    inputSchema: SuggestBudgetInputSchema, // Use imported schema
+    outputSchema: SuggestBudgetOutputSchema, // Use imported schema
   },
   async input => {
     const {output} = await prompt(input);
