@@ -1,6 +1,7 @@
+
 import { z } from 'zod';
 import { Currency } from '@/lib/constants';
-import { TransactionType } from '@/types';
+import { TransactionType, DestinationType } from '@/types';
 
 export const transactionSchema = z.object({
   type: z.nativeEnum(TransactionType, { errorMap: () => ({ message: "يرجى اختيار نوع المعاملة."}) }),
@@ -11,3 +12,29 @@ export const transactionSchema = z.object({
 });
 
 export type TransactionFormData = z.infer<typeof transactionSchema>;
+
+export const tripDetailsSchema = z.object({
+  driverName: z.string().min(1, "اسم السائق مطلوب."),
+  tripStartDate: z.date({ required_error: "تاريخ بدء الرحلة مطلوب." }),
+  tripEndDate: z.date({ required_error: "تاريخ نهاية الرحلة مطلوب." }),
+  destinationType: z.nativeEnum(DestinationType, { errorMap: () => ({ message: "يرجى اختيار نوع الوجهة."}) }),
+  countryName: z.string().optional(),
+}).refine(data => {
+  if (data.tripEndDate && data.tripStartDate) {
+    return data.tripEndDate >= data.tripStartDate;
+  }
+  return true;
+}, {
+  message: "تاريخ نهاية الرحلة يجب أن يكون بعد أو نفس تاريخ البدء.",
+  path: ["tripEndDate"],
+}).refine(data => {
+  if (data.destinationType === DestinationType.EXTERNAL) {
+    return !!data.countryName && data.countryName.trim().length > 0;
+  }
+  return true;
+}, {
+  message: "اسم البلد مطلوب للوجهات الخارجية.",
+  path: ["countryName"],
+});
+
+export type TripDetailsFormData = z.infer<typeof tripDetailsSchema>;

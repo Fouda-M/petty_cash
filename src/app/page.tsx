@@ -6,6 +6,7 @@ import AddTransactionForm from "@/components/transactions/AddTransactionForm";
 import TransactionTable from "@/components/transactions/TransactionTable";
 import BalanceSummary from "@/components/transactions/BalanceSummary";
 import PrintableReport from "@/components/print/PrintableReport";
+import TripDetailsForm from "@/components/trip/TripDetailsForm"; // Import the new component
 import type { Transaction } from "@/types";
 import { TransactionType } from "@/types";
 import { useToast } from "@/hooks/use-toast";
@@ -138,6 +139,8 @@ export default function HomePage() {
 
   return (
     <div className="container mx-auto p-4 md:p-8 space-y-8">
+      <TripDetailsForm />
+      
       <div className="flex justify-end mb-4 no-print">
         <Button onClick={handlePrint} variant="outline">
           <Printer className="ms-2 h-4 w-4" />

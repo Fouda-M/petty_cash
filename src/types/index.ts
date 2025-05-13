@@ -33,3 +33,15 @@ export type ExchangeRates = {
   [key in Currency]?: number; // Use the locally defined Currency enum
 };
 
+export enum DestinationType {
+  INTERNAL = 'INTERNAL',
+  EXTERNAL = 'EXTERNAL',
+}
+
+export interface TripDetails {
+  driverName: string;
+  tripStartDate: Date;
+  tripEndDate: Date;
+  destinationType: DestinationType;
+  countryName?: string;
+}
