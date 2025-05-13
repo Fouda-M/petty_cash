@@ -24,13 +24,13 @@ export interface Transaction {
   date: Date;
   description: string;
   amount: number;
-  currency: Currency; // Use the locally defined Currency enum
+  currency: Currency; 
   type: TransactionType;
 }
 
 export type ExchangeRates = {
   // Rates relative to USD
-  [key in Currency]?: number; // Use the locally defined Currency enum
+  [key in Currency]: number; // Ensures all currency keys are present and are numbers
 };
 
 export enum DestinationType {
@@ -43,6 +43,6 @@ export interface TripDetails {
   tripStartDate: Date;
   tripEndDate: Date;
   destinationType: DestinationType;
-  cityName?: string; // Added cityName
+  cityName?: string; 
   countryName?: string;
 }

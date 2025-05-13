@@ -3,22 +3,23 @@
 
 import * as React from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import type { Transaction } from "@/types";
+import type { Transaction, ExchangeRates } from "@/types";
 import { TransactionType } from "@/types";
 import { Currency, CONVERSION_TARGET_CURRENCIES, getCurrencyInfo } from "@/lib/constants";
-import { convertCurrency, getExchangeRate } from "@/lib/exchangeRates";
+import { convertCurrency, getExchangeRate, DEFAULT_EXCHANGE_RATES_TO_USD } from "@/lib/exchangeRates";
 import { cn } from "@/lib/utils";
 import { Wallet, Scale, HandCoins, Receipt, ShoppingCart, Landmark } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 
 interface BalanceSummaryProps {
   transactions: Transaction[];
+  exchangeRates: ExchangeRates;
 }
 
 interface TransactionDetail {
   originalCurrency: Currency;
   originalAmount: number;
-  convertedAmount: number; // to the target currency of the summary section
+  convertedAmount: number; 
   type: TransactionType;
 }
 
@@ -34,7 +35,8 @@ interface TripProfitLossDetails {
 }
 
 
-export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
+export default function BalanceSummary({ transactions, exchangeRates }: BalanceSummaryProps) {
+  const currentExchangeRates = exchangeRates || DEFAULT_EXCHANGE_RATES_TO_USD;
 
   const tripProfitLossSummary = React.useMemo(() => {
     const summary: Record<Currency, TripProfitLossDetails> = {} as any;
@@ -53,7 +55,7 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
 
       transactions.forEach(t => {
         const type = t.type;
-        const convertedAmount = convertCurrency(t.amount, t.currency, targetCurrency);
+        const convertedAmount = convertCurrency(t.amount, t.currency, targetCurrency, currentExchangeRates);
         const detail: TransactionDetail = {
           originalCurrency: t.currency,
           originalAmount: t.amount,
@@ -91,7 +93,7 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
       };
     });
     return summary;
-  }, [transactions]);
+  }, [transactions, currentExchangeRates]);
 
 
   const formatCurrencyDisplay = (
@@ -146,7 +148,7 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
               <span className="whitespace-nowrap text-end">
                 (يعادل {formatCurrencyDisplay(detail.convertedAmount, targetCurrency, 'neutral')}{' '}
                 <span className="text-xs text-muted-foreground/70" dir="ltr">
-                  @{getExchangeRate(detail.originalCurrency, targetCurrency).toFixed(4)}
+                  @{getExchangeRate(detail.originalCurrency, targetCurrency, currentExchangeRates).toFixed(4)}
                 </span>)
               </span>
             </div>
@@ -186,7 +188,7 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
             <span className="whitespace-nowrap text-end">
               (يعادل {formatCurrencyDisplay(totals.totalConverted, targetCurrency, 'neutral')}{' '}
               <span className="text-xs text-muted-foreground/70" dir="ltr">
-                @{getExchangeRate(originalCurrency, targetCurrency).toFixed(4)}
+                @{getExchangeRate(originalCurrency, targetCurrency, currentExchangeRates).toFixed(4)}
               </span>)
             </span>
           </div>
@@ -323,6 +325,3 @@ export default function BalanceSummary({ transactions }: BalanceSummaryProps) {
     </Card>
   );
 }
-
-
-    

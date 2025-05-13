@@ -6,13 +6,14 @@ import AddTransactionForm from "@/components/transactions/AddTransactionForm";
 import TransactionTable from "@/components/transactions/TransactionTable";
 import BalanceSummary from "@/components/transactions/BalanceSummary";
 import PrintableReport from "@/components/print/PrintableReport";
-import TripDetailsForm from "@/components/trip/TripDetailsForm"; // Import the new component
-import type { Transaction } from "@/types";
+import TripDetailsForm from "@/components/trip/TripDetailsForm";
+import type { Transaction, ExchangeRates } from "@/types";
 import { TransactionType } from "@/types";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { Printer } from "lucide-react";
-// import html2pdf from "html2pdf.js"; // Static import removed
+import { Printer, Settings } from "lucide-react"; // Added Settings icon
+import { loadExchangeRates, saveExchangeRates, DEFAULT_EXCHANGE_RATES_TO_USD } from "@/lib/exchangeRates";
+import ExchangeRateManager from "@/components/settings/ExchangeRateManager"; // New component
 
 import {
   Dialog,
@@ -27,10 +28,17 @@ export default function HomePage() {
   const [isLoading, setIsLoading] = React.useState(true);
   const [isEditModalOpen, setIsEditModalOpen] = React.useState(false);
   const [transactionToEdit, setTransactionToEdit] = React.useState<Transaction | null>(null);
+  const [exchangeRates, setExchangeRates] = React.useState<ExchangeRates>(DEFAULT_EXCHANGE_RATES_TO_USD);
+  const [isExchangeRateManagerOpen, setIsExchangeRateManagerOpen] = React.useState(false);
+
 
   const { toast } = useToast();
 
   React.useEffect(() => {
+    // Load exchange rates
+    setExchangeRates(loadExchangeRates());
+
+    // Load transactions
     try {
       const savedTransactions = localStorage.getItem("transactions");
       if (savedTransactions) {
@@ -113,7 +121,7 @@ export default function HomePage() {
 
   const handlePrint = async () => {
     const element = document.querySelector(".print-only");
-    if (element && typeof window !== 'undefined') { // Ensure window is defined
+    if (element && typeof window !== 'undefined') {
       try {
         const html2pdf = (await import('html2pdf.js')).default;
         html2pdf()
@@ -121,7 +129,7 @@ export default function HomePage() {
             margin: 0.5,
             filename: "transactions-report.pdf",
             image: { type: "jpeg", quality: 0.98 },
-            html2canvas: { scale: 2 },
+            html2canvas: { scale: 2, useCORS: true }, // Added useCORS
             jsPDF: { unit: "in", format: "a4", orientation: "portrait" }
           })
           .from(element)
@@ -137,11 +145,28 @@ export default function HomePage() {
     }
   };
 
+  const handleRatesUpdate = (newRates: ExchangeRates) => {
+    saveExchangeRates(newRates);
+    setExchangeRates(newRates);
+  };
+
+  if (isLoading) {
+    return (
+        <div className="flex justify-center items-center min-h-screen">
+            <p>جارٍ تحميل البيانات...</p> {}
+        </div>
+    );
+  }
+
   return (
     <div className="container mx-auto p-4 md:p-8 space-y-8">
       <TripDetailsForm />
       
-      <div className="flex justify-end mb-4 no-print">
+      <div className="flex justify-end gap-2 mb-4 no-print">
+        <Button onClick={() => setIsExchangeRateManagerOpen(true)} variant="outline">
+          <Settings className="ms-2 h-4 w-4" />
+          أسعار الصرف
+        </Button>
         <Button onClick={handlePrint} variant="outline">
           <Printer className="ms-2 h-4 w-4" />
           حفظ كـ PDF
@@ -151,7 +176,7 @@ export default function HomePage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start no-print">
         <div className="lg:col-span-1 space-y-8">
           <AddTransactionForm onTransactionAdded={handleAddTransaction} />
-          <BalanceSummary transactions={transactions} />
+          <BalanceSummary transactions={transactions} exchangeRates={exchangeRates} />
         </div>
         <div className="lg:col-span-2">
           <TransactionTable
@@ -187,9 +212,15 @@ export default function HomePage() {
         </Dialog>
       )}
 
-      {/* هذا الجزء سيتم حفظه في ملف PDF */}
+      <ExchangeRateManager
+        isOpen={isExchangeRateManagerOpen}
+        onOpenChange={setIsExchangeRateManagerOpen}
+        currentRates={exchangeRates}
+        onRatesUpdate={handleRatesUpdate}
+      />
+
       <div className="print-only hidden">
-        <PrintableReport transactions={transactions} />
+        <PrintableReport transactions={transactions} exchangeRates={exchangeRates} />
       </div>
     </div>
   );

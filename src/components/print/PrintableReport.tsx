@@ -2,16 +2,17 @@
 "use client";
 
 import * as React from "react";
-import type { Transaction } from "@/types";
-import { TransactionType, type ExchangeRates } from "@/types";
+import type { Transaction, ExchangeRates } from "@/types";
+import { TransactionType } from "@/types";
 import { Currency, CURRENCIES_INFO, CONVERSION_TARGET_CURRENCIES, getCurrencyInfo } from "@/lib/constants";
-import { convertCurrency, getExchangeRate } from "@/lib/exchangeRates";
+import { convertCurrency, getExchangeRate, DEFAULT_EXCHANGE_RATES_TO_USD } from "@/lib/exchangeRates";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { arSA } from "date-fns/locale";
 
 interface PrintableReportProps {
   transactions: Transaction[];
+  exchangeRates: ExchangeRates;
 }
 
 interface TransactionDetailPrint {
@@ -59,8 +60,9 @@ const formatCurrencyDisplayPrint = (
 };
 
 
-export default function PrintableReport({ transactions }: PrintableReportProps) {
+export default function PrintableReport({ transactions, exchangeRates }: PrintableReportProps) {
   const [reportGeneratedDate, setReportGeneratedDate] = React.useState<Date | null>(null);
+  const currentExchangeRates = exchangeRates || DEFAULT_EXCHANGE_RATES_TO_USD;
 
   React.useEffect(() => {
     setReportGeneratedDate(new Date());
@@ -68,7 +70,7 @@ export default function PrintableReport({ transactions }: PrintableReportProps) 
 
   const aggregatedExpenses = React.useMemo(() => {
     const expensesByCurrency: Record<
-      string, // Currency code as string key
+      string, 
       { total: number; details: { description: string; amount: number }[] }
     > = {};
 
@@ -103,7 +105,7 @@ export default function PrintableReport({ transactions }: PrintableReportProps) 
 
       transactions.forEach(t => {
         const type = t.type;
-        const convertedAmount = convertCurrency(t.amount, t.currency, targetCurrency);
+        const convertedAmount = convertCurrency(t.amount, t.currency, targetCurrency, currentExchangeRates);
         const detail: TransactionDetailPrint = {
           originalCurrency: t.currency,
           originalAmount: t.amount,
@@ -138,7 +140,7 @@ export default function PrintableReport({ transactions }: PrintableReportProps) 
       };
     });
     return summary;
-  }, [transactions]);
+  }, [transactions, currentExchangeRates]);
 
   const renderItemizedTransactionDetailBreakdownPrint = (details: TransactionDetailPrint[], targetCurrency: Currency) => {
     if (details.length === 0) return <div className="ps-6 pe-2 mt-1 text-xs text-gray-500">لا توجد تفاصيل لهذه الفئة.</div>;
@@ -156,7 +158,7 @@ export default function PrintableReport({ transactions }: PrintableReportProps) 
               <span className="whitespace-nowrap text-end">
                 (يعادل {formatCurrencyDisplayPrint(detail.convertedAmount, targetCurrency, 'neutral')}{' '}
                 <span className="text-xs text-gray-500" dir="ltr">
-                  @{getExchangeRate(detail.originalCurrency, targetCurrency).toFixed(4)}
+                  @{getExchangeRate(detail.originalCurrency, targetCurrency, currentExchangeRates).toFixed(4)}
                 </span>)
               </span>
             </div>
@@ -189,7 +191,7 @@ export default function PrintableReport({ transactions }: PrintableReportProps) 
             <span className="whitespace-nowrap text-end">
               (يعادل {formatCurrencyDisplayPrint(totals.totalConverted, targetCurrency, 'neutral')}{' '}
               <span className="text-xs text-gray-500" dir="ltr">
-                @{getExchangeRate(originalCurrency, targetCurrency).toFixed(4)}
+                @{getExchangeRate(originalCurrency, targetCurrency, currentExchangeRates).toFixed(4)}
               </span>)
             </span>
           </div>
@@ -327,4 +329,3 @@ export default function PrintableReport({ transactions }: PrintableReportProps) 
     </div>
   );
 }
-
