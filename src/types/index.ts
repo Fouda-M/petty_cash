@@ -1,4 +1,14 @@
-import type { Currency } from '@/lib/constants';
+
+import type { Currency as CurrencyEnum } from '@/lib/constants'; // Keep original import for type usage
+
+// Export Currency enum directly from here
+export enum Currency {
+  USD = 'USD',
+  AED = 'AED',
+  EGP = 'EGP',
+  JOD = 'JOD',
+  SAR = 'SAR',
+}
 
 export enum TransactionType {
   EXPENSE = 'EXPENSE',
@@ -14,11 +24,12 @@ export interface Transaction {
   date: Date;
   description: string;
   amount: number;
-  currency: Currency;
+  currency: Currency; // Use the locally defined Currency enum
   type: TransactionType;
 }
 
 export type ExchangeRates = {
   // Rates relative to USD
-  [key in Currency]?: number;
+  [key in Currency]?: number; // Use the locally defined Currency enum
 };
+

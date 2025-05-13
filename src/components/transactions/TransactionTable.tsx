@@ -13,11 +13,11 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import type { Transaction } from "@/types";
-import { TransactionType } from "@/types";
-import { Currency, getCurrencyInfo, CURRENCIES_INFO, getTransactionTypeInfo } from "@/lib/constants";
-import { format } from "date-fns";
-import { arSA } from "date-fns/locale"; 
-import { ArrowUpDown, ListFilter, Trash2, Pencil } from "lucide-react";
+import { TransactionType, Currency } from "@/types";
+import { getCurrencyInfo, CURRENCIES_INFO, getTransactionTypeInfo, TRANSACTION_TYPES_INFO } from "@/lib/constants";
+import { format, parseISO } from "date-fns";
+import { arSA } from "date-fns/locale";
+import { ArrowUpDown, Trash2, Pencil, Filter as FilterIcon, ChevronDown } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -26,6 +26,18 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker"; 
+import { FormItem, FormLabel } from "@/components/ui/form"; // Using FormItem and FormLabel for consistent styling
 
 interface TransactionTableProps {
   transactions: Transaction[];
@@ -39,7 +51,16 @@ type SortDirection = 'asc' | 'desc';
 export default function TransactionTable({ transactions, onDeleteTransaction, onEditTransactionRequest }: TransactionTableProps) {
   const [sortKey, setSortKey] = React.useState<SortKey>('date');
   const [sortDirection, setSortDirection] = React.useState<SortDirection>('desc');
-  const [currencyFilter, setCurrencyFilter] = React.useState<Set<Currency>>(new Set(Object.values(Currency)));
+  
+  // Filter states
+  const [isFilterDialogOpen, setIsFilterDialogOpen] = React.useState(false);
+  const [dateFilterFrom, setDateFilterFrom] = React.useState<Date | undefined>(undefined);
+  const [dateFilterTo, setDateFilterTo] = React.useState<Date | undefined>(undefined);
+  const [typeFilter, setTypeFilter] = React.useState<Set<TransactionType>>(new Set());
+  const [descriptionFilter, setDescriptionFilter] = React.useState<string>("");
+  const [amountMinFilter, setAmountMinFilter] = React.useState<number | undefined>(undefined);
+  const [amountMaxFilter, setAmountMaxFilter] = React.useState<number | undefined>(undefined);
+  const [currencyFilter, setCurrencyFilter] = React.useState<Set<Currency>>(new Set());
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -50,7 +71,7 @@ export default function TransactionTable({ transactions, onDeleteTransaction, on
     }
   };
 
-  const toggleCurrencyFilter = (currency: Currency) => {
+  const toggleCurrencyFilterItem = (currency: Currency) => {
     setCurrencyFilter(prev => {
       const newSet = new Set(prev);
       if (newSet.has(currency)) {
@@ -58,20 +79,76 @@ export default function TransactionTable({ transactions, onDeleteTransaction, on
       } else {
         newSet.add(currency);
       }
-      // If all are unchecked, effectively show all (like resetting filter)
-      // Or if all are checked, it's also like showing all.
-      // For simplicity, if the set becomes empty by unchecking the last one, re-populate it to show all.
-      return newSet.size === 0 ? new Set(Object.values(Currency)) : newSet;
+      return newSet;
     });
   };
-  
-  const sortedTransactions = React.useMemo(() => {
-    // Filter first
-    let filtered = [...transactions].filter(t => 
-        currencyFilter.size === CURRENCIES_INFO.length || // If filter set includes all possible currencies
-        currencyFilter.has(t.currency)
-    );
 
+  const toggleTypeFilterItem = (transactionType: TransactionType) => {
+    setTypeFilter(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(transactionType)) {
+        newSet.delete(transactionType);
+      } else {
+        newSet.add(transactionType);
+      }
+      return newSet;
+    });
+  };
+
+  const handleClearFilters = () => {
+    setDateFilterFrom(undefined);
+    setDateFilterTo(undefined);
+    setTypeFilter(new Set());
+    setDescriptionFilter("");
+    setAmountMinFilter(undefined);
+    setAmountMaxFilter(undefined);
+    setCurrencyFilter(new Set());
+    // setIsFilterDialogOpen(false); // Optionally close dialog on clear
+  };
+
+  const filteredAndSortedTransactions = React.useMemo(() => {
+    let filtered = [...transactions].map(t => ({
+      ...t,
+      // Ensure date is a Date object for consistent comparison
+      date: typeof t.date === 'string' ? parseISO(t.date) : t.date 
+    }));
+
+    // Apply date filter
+    if (dateFilterFrom) {
+      const fromDate = new Date(dateFilterFrom);
+      fromDate.setHours(0, 0, 0, 0);
+      filtered = filtered.filter(t => t.date >= fromDate);
+    }
+    if (dateFilterTo) {
+      const toDate = new Date(dateFilterTo);
+      toDate.setHours(23, 59, 59, 999);
+      filtered = filtered.filter(t => t.date <= toDate);
+    }
+
+    // Apply type filter
+    if (typeFilter.size > 0) {
+      filtered = filtered.filter(t => typeFilter.has(t.type));
+    }
+    
+    // Apply description filter
+    if (descriptionFilter.trim() !== "") {
+      filtered = filtered.filter(t => t.description.toLowerCase().includes(descriptionFilter.toLowerCase()));
+    }
+
+    // Apply amount filter
+    if (amountMinFilter !== undefined) {
+      filtered = filtered.filter(t => t.amount >= amountMinFilter);
+    }
+    if (amountMaxFilter !== undefined) {
+      filtered = filtered.filter(t => t.amount <= amountMaxFilter);
+    }
+
+    // Apply currency filter
+    if (currencyFilter.size > 0) {
+      filtered = filtered.filter(t => currencyFilter.has(t.currency));
+    }
+
+    // Apply sorting
     if (sortKey === 'none') return filtered;
     
     return filtered.sort((a, b) => {
@@ -88,7 +165,6 @@ export default function TransactionTable({ transactions, onDeleteTransaction, on
          valB = b.type.toString();
       }
 
-
       if (typeof valA === 'string' && typeof valB === 'string') {
         return sortDirection === 'asc' ? valA.localeCompare(valB, 'ar') : valB.localeCompare(valA, 'ar');
       }
@@ -97,7 +173,7 @@ export default function TransactionTable({ transactions, onDeleteTransaction, on
       }
       return 0;
     });
-  }, [transactions, sortKey, sortDirection, currencyFilter]);
+  }, [transactions, sortKey, sortDirection, dateFilterFrom, dateFilterTo, typeFilter, descriptionFilter, amountMinFilter, amountMaxFilter, currencyFilter]);
 
   const formatCurrency = (amount: number, currencyCode: Currency) => {
     const currencyInfo = getCurrencyInfo(currencyCode);
@@ -128,27 +204,131 @@ export default function TransactionTable({ transactions, onDeleteTransaction, on
           <CardTitle>سجل المعاملات</CardTitle>
           <CardDescription>عرض وإدارة معاملاتك المسجلة.</CardDescription>
         </div>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
+        <Dialog open={isFilterDialogOpen} onOpenChange={setIsFilterDialogOpen}>
+          <DialogTrigger asChild>
             <Button variant="outline" size="sm">
-              <ListFilter className="ms-2 h-4 w-4" /> 
-              تصفية حسب العملة
+              <FilterIcon className="ms-2 h-4 w-4" /> 
+              تصفية / فرز
             </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" dir="rtl">
-            <DropdownMenuLabel>تصفية حسب العملة</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            {CURRENCIES_INFO.map(c => (
-              <DropdownMenuCheckboxItem
-                key={c.code}
-                checked={currencyFilter.has(c.code)}
-                onCheckedChange={() => toggleCurrencyFilter(c.code)}
-              >
-                {c.name} ({c.code})
-              </DropdownMenuCheckboxItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-md md:max-w-lg lg:max-w-xl">
+            <DialogHeader>
+              <DialogTitle>تصفية المعاملات</DialogTitle>
+              <DialogDescription>
+                قم بتطبيق الفلاتر لعرض معاملات محددة.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4 max-h-[60vh] overflow-y-auto px-2">
+              {/* Date Filter */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <FormItem>
+                  <FormLabel>من تاريخ</FormLabel>
+                  <DatePicker date={dateFilterFrom} setDate={setDateFilterFrom} />
+                </FormItem>
+                <FormItem>
+                  <FormLabel>إلى تاريخ</FormLabel>
+                  <DatePicker date={dateFilterTo} setDate={setDateFilterTo} />
+                </FormItem>
+              </div>
+
+              {/* Type Filter */}
+              <FormItem>
+                <FormLabel>نوع المعاملة</FormLabel>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" className="w-full justify-between text-start">
+                      <span>
+                        {typeFilter.size === 0
+                          ? "جميع الأنواع"
+                          : `${typeFilter.size} أنواع مختارة`}
+                      </span>
+                      <ChevronDown className="h-4 w-4 opacity-50" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-[var(--radix-dropdown-menu-trigger-width)] max-h-60 overflow-y-auto">
+                    <DropdownMenuLabel>اختر الأنواع</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    {TRANSACTION_TYPES_INFO.map(typeInfo => (
+                      <DropdownMenuCheckboxItem
+                        key={typeInfo.type}
+                        checked={typeFilter.has(typeInfo.type)}
+                        onCheckedChange={() => toggleTypeFilterItem(typeInfo.type)}
+                      >
+                        {typeInfo.name}
+                      </DropdownMenuCheckboxItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </FormItem>
+
+              {/* Description Filter */}
+              <FormItem>
+                <FormLabel>الوصف</FormLabel>
+                <Input
+                  placeholder="بحث بالوصف..."
+                  value={descriptionFilter}
+                  onChange={(e) => setDescriptionFilter(e.target.value)}
+                />
+              </FormItem>
+
+              {/* Amount Filter */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <FormItem>
+                  <FormLabel>أقل مبلغ</FormLabel>
+                  <Input
+                    type="number"
+                    placeholder="0.00"
+                    value={amountMinFilter === undefined ? '' : String(amountMinFilter)}
+                    onChange={(e) => setAmountMinFilter(e.target.value === '' ? undefined : parseFloat(e.target.value))}
+                  />
+                </FormItem>
+                <FormItem>
+                  <FormLabel>أقصى مبلغ</FormLabel>
+                  <Input
+                    type="number"
+                    placeholder="1000.00"
+                    value={amountMaxFilter === undefined ? '' : String(amountMaxFilter)}
+                    onChange={(e) => setAmountMaxFilter(e.target.value === '' ? undefined : parseFloat(e.target.value))}
+                  />
+                </FormItem>
+              </div>
+
+              {/* Currency Filter */}
+              <FormItem>
+                <FormLabel>العملة</FormLabel>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                     <Button variant="outline" className="w-full justify-between text-start">
+                        <span>
+                        {currencyFilter.size === 0
+                            ? "جميع العملات"
+                            : `${currencyFilter.size} عملات مختارة`}
+                        </span>
+                        <ChevronDown className="h-4 w-4 opacity-50" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-[var(--radix-dropdown-menu-trigger-width)] max-h-60 overflow-y-auto">
+                    <DropdownMenuLabel>اختر العملات</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    {CURRENCIES_INFO.map(currencyInfo => (
+                      <DropdownMenuCheckboxItem
+                        key={currencyInfo.code}
+                        checked={currencyFilter.has(currencyInfo.code)}
+                        onCheckedChange={() => toggleCurrencyFilterItem(currencyInfo.code)}
+                      >
+                        {currencyInfo.name} ({currencyInfo.symbol})
+                      </DropdownMenuCheckboxItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </FormItem>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={handleClearFilters}>مسح الفلاتر</Button>
+              <Button onClick={() => setIsFilterDialogOpen(false)}>تطبيق</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </CardHeader>
       <CardContent>
         <div className="overflow-x-auto">
@@ -157,13 +337,13 @@ export default function TransactionTable({ transactions, onDeleteTransaction, on
               <TableRow>
                 <TableHead
                   onClick={() => handleSort('date')}
-                  className="cursor-pointer hover:bg-accent text-start"
+                  className="cursor-pointer hover:bg-accent text-start whitespace-nowrap"
                 >
                   التاريخ <ArrowUpDown className={`me-2 h-4 w-4 inline ${sortKey === 'date' ? 'opacity-100' : 'opacity-50'}`} /> 
                 </TableHead>
                 <TableHead
                   onClick={() => handleSort('type')}
-                  className="cursor-pointer hover:bg-accent text-start"
+                  className="cursor-pointer hover:bg-accent text-start whitespace-nowrap"
                 >
                   النوع <ArrowUpDown className={`me-2 h-4 w-4 inline ${sortKey === 'type' ? 'opacity-100' : 'opacity-50'}`} /> 
                 </TableHead>
@@ -175,28 +355,28 @@ export default function TransactionTable({ transactions, onDeleteTransaction, on
                 </TableHead>
                 <TableHead
                   onClick={() => handleSort('amount')}
-                  className="text-end cursor-pointer hover:bg-accent"
+                  className="text-end cursor-pointer hover:bg-accent whitespace-nowrap"
                 >
                   المبلغ <ArrowUpDown className={`me-2 h-4 w-4 inline ${sortKey === 'amount' ? 'opacity-100' : 'opacity-50'}`} /> 
                 </TableHead>
                 <TableHead
                   onClick={() => handleSort('currency')}
-                  className="cursor-pointer hover:bg-accent text-start"
+                  className="cursor-pointer hover:bg-accent text-start whitespace-nowrap"
                 >
                   العملة <ArrowUpDown className={`me-2 h-4 w-4 inline ${sortKey === 'currency' ? 'opacity-100' : 'opacity-50'}`} /> 
                 </TableHead>
-                <TableHead className="text-end">الإجراءات</TableHead>
+                <TableHead className="text-end whitespace-nowrap">الإجراءات</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {sortedTransactions.map((transaction) => (
+              {filteredAndSortedTransactions.map((transaction) => (
                 <TableRow key={transaction.id}>
-                  <TableCell className="text-start">{format(new Date(transaction.date), "PP", { locale: arSA })}</TableCell>
-                  <TableCell className="text-start">{getTransactionTypeName(transaction.type)}</TableCell>
+                  <TableCell className="text-start whitespace-nowrap">{format(new Date(transaction.date), "PP", { locale: arSA })}</TableCell>
+                  <TableCell className="text-start whitespace-nowrap">{getTransactionTypeName(transaction.type)}</TableCell>
                   <TableCell className="font-medium text-start">{transaction.description}</TableCell>
-                  <TableCell className="text-end">{formatCurrency(transaction.amount, transaction.currency)}</TableCell>
-                  <TableCell className="text-start">{transaction.currency}</TableCell>
-                  <TableCell className="text-end space-x-1">
+                  <TableCell className="text-end whitespace-nowrap">{formatCurrency(transaction.amount, transaction.currency)}</TableCell>
+                  <TableCell className="text-start whitespace-nowrap">{getCurrencyInfo(transaction.currency)?.name || transaction.currency}</TableCell>
+                  <TableCell className="text-end space-x-1 whitespace-nowrap">
                     <Button variant="ghost" size="icon" onClick={() => onEditTransactionRequest(transaction)} aria-label="تعديل المعاملة">
                       <Pencil className="h-4 w-4 text-blue-500" />
                     </Button>
@@ -206,6 +386,13 @@ export default function TransactionTable({ transactions, onDeleteTransaction, on
                   </TableCell>
                 </TableRow>
               ))}
+               {filteredAndSortedTransactions.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                    لا توجد معاملات تطابق معايير التصفية الحالية.
+                  </TableCell>
+                </TableRow>
+              )}
             </TableBody>
           </Table>
         </div>
@@ -213,3 +400,4 @@ export default function TransactionTable({ transactions, onDeleteTransaction, on
     </Card>
   );
 }
+
