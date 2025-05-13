@@ -1,4 +1,3 @@
-
 'use server';
 /**
  * @fileOverview Flow for getting the latest exchange rates using a tool.
@@ -27,11 +26,11 @@ export async function getLatestExchangeRates(): Promise<GetLatestExchangeRatesOu
 
 const getRatesPrompt = ai.definePrompt({
     name: 'getLatestExchangeRatesPrompt',
-    system: 'You are an assistant that helps fetch the latest exchange rates. Use the available tool for this task.',
+    system: 'You are an assistant that helps fetch the latest exchange rates. You MUST use the available tool for this task.',
     tools: [fetchExchangeRatesTool],
     inputSchema: z.object({}).describe("No specific input needed for this prompt"),
     outputSchema: ExchangeRateToolOutputSchema,
-    prompt: 'Please fetch the latest exchange rates and provide the result structured according to the defined output schema.', // Added user-like instruction
+    prompt: 'Fetch the latest exchange rates using the available tool. Then, provide the fetched rates *only* as a JSON object conforming to the output schema. Do not include any other text, conversation, or explanation.',
 });
 
 
@@ -43,25 +42,69 @@ const getLatestExchangeRatesFlow = ai.defineFlow(
   },
   async () => {
     console.log('getLatestExchangeRatesFlow started');
-    
-    const llmResponse = await getRatesPrompt({});
-
-    if (llmResponse.output) {
-        console.log('LLM response output:', llmResponse.output);
-        // The output from the prompt should match ExchangeRateToolOutputSchema.
-        // We then ensure it's correctly typed as AppExchangeRates / GetLatestExchangeRatesOutput.
-        // The schemas are designed to be compatible.
-        const validatedOutput = GetLatestExchangeRatesFlowOutputSchema.safeParse(llmResponse.output);
-        if (validatedOutput.success) {
-            return validatedOutput.data;
-        } else {
-            console.error('LLM output failed validation against GetLatestExchangeRatesFlowOutputSchema:', validatedOutput.error);
-            throw new Error('Fetched exchange rates data is invalid.');
-        }
+    let llmResponse;
+    try {
+      llmResponse = await getRatesPrompt({});
+      // Detailed logging of the entire LLM response object
+      console.log('Full LLM Response from getRatesPrompt:', JSON.stringify(llmResponse, null, 2));
+    } catch (promptError) {
+      console.error('Error calling getRatesPrompt:', promptError);
+      // It's possible promptError might be an object, ensure it's stringified or message is extracted
+      const errorMessage = promptError instanceof Error ? promptError.message : String(promptError);
+      console.error('getRatesPrompt error details:', JSON.stringify(promptError, null, 2));
+      throw new Error(`Failed to interact with the LLM for exchange rates: ${errorMessage}`);
     }
 
-    console.error('Failed to get exchange rates from LLM/tool interaction. Output was not found or was empty.');
-    throw new Error('Could not retrieve exchange rates.');
+    if (llmResponse && llmResponse.output) {
+        console.log('LLM response.output received:', JSON.stringify(llmResponse.output, null, 2));
+        // The output from the prompt should match ExchangeRateToolOutputSchema.
+        // We then ensure it's correctly typed and validated as AppExchangeRates / GetLatestExchangeRatesOutput.
+        const validatedOutput = GetLatestExchangeRatesFlowOutputSchema.safeParse(llmResponse.output);
+        if (validatedOutput.success) {
+            console.log('Validated output successfully:', JSON.stringify(validatedOutput.data, null, 2));
+            return validatedOutput.data;
+        } else {
+            console.error('LLM output was present but failed validation against GetLatestExchangeRatesFlowOutputSchema:', validatedOutput.error.flatten());
+            console.error('Raw output that failed validation:', JSON.stringify(llmResponse.output, null, 2));
+            throw new Error('Fetched exchange rates data is invalid or not in the expected format.');
+        }
+    } else {
+        // llmResponse.output is not present or llmResponse is null/undefined
+        console.error('LLM response.output was not found or llmResponse was null/undefined.');
+        if (llmResponse && llmResponse.candidates && llmResponse.candidates.length > 0) {
+            const candidate = llmResponse.candidates[0];
+            console.error('LLM response primary candidate details:', JSON.stringify(candidate, null, 2));
+            if (candidate.message && candidate.message.content) {
+                let foundToolRequest = false;
+                candidate.message.content.forEach(part => {
+                    if (part.text) {
+                        console.error('LLM text response part (instead of structured output):', part.text);
+                    }
+                    if (part.toolRequest) {
+                        console.error('LLM generated a toolRequest:', JSON.stringify(part.toolRequest, null, 2));
+                        foundToolRequest = true;
+                    }
+                     if (part.toolResponse) {
+                        console.error('LLM part contained a toolResponse:', JSON.stringify(part.toolResponse, null, 2));
+                    }
+                });
+                if (foundToolRequest) {
+                    console.error("A toolRequest was generated by the LLM, but the final structured output (llmResponse.output) is missing. This might indicate an issue in the second LLM call (post-tool execution) or the LLM's final response didn't conform to the output schema.");
+                } else {
+                    console.error("No toolRequest was found in the primary candidate's message parts, and no structured output (llmResponse.output). The LLM may not have attempted to use the tool, or its response was pure text not matching the schema.");
+                }
+            } else {
+                 console.error("Primary candidate's message or message.content was missing.");
+            }
+        } else if (llmResponse) {
+            // Log if llmResponse exists but is not structured as expected (e.g., no candidates)
+            console.error('LLM response was present but had no candidates or unexpected structure:', JSON.stringify(llmResponse, null, 2));
+        } else {
+            // This case means llmResponse itself was null or undefined from the getRatesPrompt call
+            console.error('LLM response (from getRatesPrompt) was entirely null or undefined.');
+        }
+        
+        throw new Error('Could not retrieve exchange rates; LLM did not provide the expected structured output (llmResponse.output was missing). Check logs for details.');
+    }
   }
 );
-
