@@ -1,6 +1,8 @@
+
 "use client";
 
 import * as React from "react";
+import dynamic from 'next/dynamic';
 import AddTransactionForm from "@/components/transactions/AddTransactionForm";
 import TransactionTable from "@/components/transactions/TransactionTable";
 import BalanceSummary from "@/components/transactions/BalanceSummary";
@@ -10,7 +12,10 @@ import { TransactionType } from "@/types";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Printer } from "lucide-react";
-import html2pdf from "html2pdf.js"; // ✅ مكتبة التحويل لـ PDF
+
+// Dynamically import html2pdf.js with ssr: false
+const html2pdf = dynamic(() => import('html2pdf.js'), { ssr: false });
+
 
 import {
   Dialog,
@@ -109,29 +114,67 @@ export default function HomePage() {
     handleCloseEditModal();
   };
 
-  // ✅ دالة الحفظ كـ PDF
-  const handlePrint = () => {
+  
+  const handlePrint = async () => {
+    if (typeof window === 'undefined' || !html2pdf) {
+      // html2pdf is not loaded yet or not in a browser environment
+      toast({
+        variant: "destructive",
+        title: "خطأ في التحضير",
+        description: "مكتبة إنشاء PDF غير جاهزة بعد. يرجى المحاولة مرة أخرى.",
+      });
+      return;
+    }
+
     const element = document.querySelector(".print-only");
     if (element) {
-      html2pdf()
-        .set({
-          margin: 0.5,
-          filename: "transactions-report.pdf",
-          image: { type: "jpeg", quality: 0.98 },
-          html2canvas: { scale: 2 },
-          jsPDF: { unit: "in", format: "a4", orientation: "portrait" }
-        })
-        .from(element)
-        .save();
+      // Ensure html2pdf default export is correctly accessed if it's a module
+      const exporter = typeof html2pdf === 'function' ? html2pdf : (html2pdf as any).default;
+
+      if (typeof exporter !== 'function') {
+        console.error("html2pdf is not a function after dynamic import:", exporter);
+        toast({
+            variant: "destructive",
+            title: "خطأ في المكتبة",
+            description: "لم يتم تحميل مكتبة PDF بشكل صحيح.",
+        });
+        return;
+      }
+
+      try {
+        await exporter()
+          .set({
+            margin: 0.5,
+            filename: "transactions-report.pdf",
+            image: { type: "jpeg", quality: 0.98 },
+            html2canvas: { scale: 2, useCORS: true }, // Added useCORS
+            jsPDF: { unit: "in", format: "a4", orientation: "portrait" }
+          })
+          .from(element)
+          .save();
+      } catch (error) {
+        console.error("Error generating PDF:", error);
+        toast({
+          variant: "destructive",
+          title: "خطأ في إنشاء PDF",
+          description: "حدث خطأ أثناء محاولة حفظ الملف. تأكد من أن المحتوى قابل للطباعة.",
+        });
+      }
+    } else {
+        toast({
+            variant: "destructive",
+            title: "خطأ",
+            description: "لم يتم العثور على المحتوى القابل للطباعة.",
+        });
     }
   };
 
   return (
     <div className="container mx-auto p-4 md:p-8 space-y-8">
       <div className="flex justify-end mb-4 no-print">
-        <Button onClick={handlePrint} variant="outline">
+        <Button onClick={handlePrint} variant="outline" disabled={isLoading || !html2pdf}>
           <Printer className="ms-2 h-4 w-4" />
-          حفظ كـ PDF / طباعة
+          حفظ كـ PDF
         </Button>
       </div>
 
@@ -174,10 +217,11 @@ export default function HomePage() {
         </Dialog>
       )}
 
-      {/* ✅ هذا الجزء سيتم حفظه في ملف PDF */}
+      {/* هذا الجزء سيتم حفظه في ملف PDF */}
       <div className="print-only hidden">
         <PrintableReport transactions={transactions} />
       </div>
     </div>
   );
 }
+
