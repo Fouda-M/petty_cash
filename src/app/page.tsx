@@ -11,9 +11,9 @@ import type { Transaction, ExchangeRates } from "@/types";
 import { TransactionType } from "@/types";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { Printer, Settings } from "lucide-react"; // Added Settings icon
-import { loadExchangeRates, saveExchangeRates, DEFAULT_EXCHANGE_RATES_TO_USD } from "@/lib/exchangeRates";
-import ExchangeRateManager from "@/components/settings/ExchangeRateManager"; // New component
+import { Printer, Settings } from "lucide-react";
+import { loadExchangeRates, saveExchangeRates } from "@/lib/exchangeRates";
+import ExchangeRateManager from "@/components/settings/ExchangeRateManager";
 
 import {
   Dialog,
@@ -28,16 +28,13 @@ export default function HomePage() {
   const [isLoading, setIsLoading] = React.useState(true);
   const [isEditModalOpen, setIsEditModalOpen] = React.useState(false);
   const [transactionToEdit, setTransactionToEdit] = React.useState<Transaction | null>(null);
-  const [exchangeRates, setExchangeRates] = React.useState<ExchangeRates>(DEFAULT_EXCHANGE_RATES_TO_USD);
+  const [exchangeRates, setExchangeRates] = React.useState<ExchangeRates>(() => loadExchangeRates());
   const [isExchangeRateManagerOpen, setIsExchangeRateManagerOpen] = React.useState(false);
 
 
   const { toast } = useToast();
 
   React.useEffect(() => {
-    // Load exchange rates
-    setExchangeRates(loadExchangeRates());
-
     // Load transactions
     try {
       const savedTransactions = localStorage.getItem("transactions");
@@ -129,7 +126,7 @@ export default function HomePage() {
             margin: 0.5,
             filename: "transactions-report.pdf",
             image: { type: "jpeg", quality: 0.98 },
-            html2canvas: { scale: 2, useCORS: true }, // Added useCORS
+            html2canvas: { scale: 2, useCORS: true },
             jsPDF: { unit: "in", format: "a4", orientation: "portrait" }
           })
           .from(element)
@@ -148,6 +145,11 @@ export default function HomePage() {
   const handleRatesUpdate = (newRates: ExchangeRates) => {
     saveExchangeRates(newRates);
     setExchangeRates(newRates);
+    // Optionally, re-calculate summaries or inform user rates are updated
+     toast({
+        title: "تم تحديث أسعار الصرف",
+        description: "تم تطبيق أسعار الصرف الجديدة على الملخصات.",
+      });
   };
 
   if (isLoading) {

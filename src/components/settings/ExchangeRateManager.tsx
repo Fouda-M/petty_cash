@@ -32,7 +32,6 @@ export default function ExchangeRateManager({
   currentRates,
   onRatesUpdate,
 }: ExchangeRateManagerProps) {
-  // Use a state that can hold numbers or string for input editing, then parse on save
   const [editableRateStrings, setEditableRateStrings] = React.useState<Record<Currency, string>>(() => {
     const initialStrings: Record<Currency, string> = {} as Record<Currency, string>;
     for (const currencyInfo of CURRENCIES_INFO) {
@@ -45,7 +44,6 @@ export default function ExchangeRateManager({
   const { toast } = useToast();
 
   React.useEffect(() => {
-    // Update editableRateStrings when currentRates prop changes, e.g., when dialog is reopened
     if (isOpen && currentRates) {
       const updatedStrings: Record<Currency, string> = {} as Record<Currency, string>;
       for (const currencyInfo of CURRENCIES_INFO) {
@@ -61,25 +59,26 @@ export default function ExchangeRateManager({
 
   const handleSave = () => {
     setIsSaving(true);
-    const newRates: ExchangeRates = { ...currentRates }; // Start with current valid rates
+    const newRates: ExchangeRates = { ...currentRates };
     let allValid = true;
 
     for (const currencyInfo of CURRENCIES_INFO) {
       if (currencyInfo.code === Currency.USD) {
-        newRates[Currency.USD] = 1; // USD is always 1
+        newRates[Currency.USD] = 1;
         continue;
       }
       const stringValue = editableRateStrings[currencyInfo.code];
       const numValue = parseFloat(stringValue);
 
-      if (stringValue === "" || isNaN(numValue) || numValue <= 0) {
+      if (stringValue.trim() === "" || isNaN(numValue) || numValue <= 0) {
         allValid = false;
         toast({
           variant: "destructive",
           title: "خطأ في سعر الصرف",
           description: `سعر الصرف لـ ${currencyInfo.name} غير صالح. يجب أن يكون رقمًا موجبًا.`,
         });
-        break; 
+        setIsSaving(false);
+        return; 
       }
       newRates[currencyInfo.code] = numValue;
     }
@@ -90,7 +89,7 @@ export default function ExchangeRateManager({
         title: "تم حفظ أسعار الصرف",
         description: "تم تحديث أسعار الصرف بنجاح.",
       });
-      onOpenChange(false); // Close dialog on successful save
+      onOpenChange(false);
     }
     setIsSaving(false);
   };
@@ -101,7 +100,7 @@ export default function ExchangeRateManager({
         <DialogHeader>
           <DialogTitle>إدارة أسعار الصرف (مقابل الدولار الأمريكي)</DialogTitle>
           <DialogDescription>
-            عدّل أسعار صرف العملات. السعر هو قيمة الوحدة الواحدة من العملة بالدولار الأمريكي.
+            عدّل أسعار صرف العملات. السعر هو قيمة الوحدة الواحدة من العملة بالدولار الأمريكي. الدولار الأمريكي ثابت عند 1.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto px-1">
@@ -113,12 +112,12 @@ export default function ExchangeRateManager({
               <Input
                 id={`rate-${currencyInfo.code}`}
                 type="number"
-                step="any" // Allow more precision
+                step="any"
                 value={currencyInfo.code === Currency.USD ? "1" : editableRateStrings[currencyInfo.code] || ""}
                 onChange={(e) => handleRateInputChange(currencyInfo.code, e.target.value)}
                 className="col-span-2"
                 placeholder="0.00000"
-                disabled={currencyInfo.code === Currency.USD}
+                disabled={currencyInfo.code === Currency.USD || isSaving}
                 readOnly={currencyInfo.code === Currency.USD}
               />
             </div>

@@ -1,3 +1,4 @@
+
 import type { ExchangeRates } from '@/types';
 import { Currency } from '@/lib/constants';
 
@@ -11,7 +12,7 @@ export const DEFAULT_EXCHANGE_RATES_TO_USD: ExchangeRates = {
   [Currency.SAR]: 0.26667, // 1 SAR = 0.26667 USD
 };
 
-const EXCHANGE_RATES_STORAGE_KEY = 'exchangeRates_v1'; // Added _v1 for potential future migrations
+const EXCHANGE_RATES_STORAGE_KEY = 'exchangeRates_v1';
 
 export function loadExchangeRates(): ExchangeRates {
   if (typeof window === 'undefined') {
@@ -20,22 +21,21 @@ export function loadExchangeRates(): ExchangeRates {
   try {
     const storedRatesJson = localStorage.getItem(EXCHANGE_RATES_STORAGE_KEY);
     if (storedRatesJson) {
-      const parsedRates = JSON.parse(storedRatesJson) as ExchangeRates;
-      // Validate and merge with defaults to ensure all currencies are present and valid
-      const validatedRates: ExchangeRates = { ...DEFAULT_EXCHANGE_RATES_TO_USD };
+      const parsedRates = JSON.parse(storedRatesJson) as Partial<ExchangeRates>;
+      const validatedRates: ExchangeRates = {} as ExchangeRates;
       let ratesChanged = false;
+
       for (const currencyCode of Object.values(Currency)) {
         const defaultRate = DEFAULT_EXCHANGE_RATES_TO_USD[currencyCode];
         if (parsedRates.hasOwnProperty(currencyCode) && typeof parsedRates[currencyCode] === 'number' && parsedRates[currencyCode]! > 0) {
           validatedRates[currencyCode] = parsedRates[currencyCode]!;
         } else {
-          // If rate is missing, invalid, or not positive, use default and mark for re-saving
           validatedRates[currencyCode] = defaultRate;
           ratesChanged = true;
         }
       }
        if (ratesChanged) {
-         saveExchangeRates(validatedRates); // Save corrected/completed rates
+         saveExchangeRates(validatedRates); 
        }
       return validatedRates;
     }
@@ -59,17 +59,22 @@ export function saveExchangeRates(rates: ExchangeRates): void {
   }
 }
 
-export function getExchangeRate(from: Currency, to: Currency, currentRates: ExchangeRates): number {
+export function getExchangeRate(from: Currency, to: Currency, currentRates?: ExchangeRates): number {
   if (from === to) return 1;
 
-  const ratesToUse = currentRates || DEFAULT_EXCHANGE_RATES_TO_USD;
+  const ratesToUse = currentRates || loadExchangeRates(); // Load if not provided, or use provided
 
-  const rateFromToUsd = ratesToUse[from];
-  const rateToToUsd = ratesToUse[to];
+  const rateFromToUsd = (ratesToUse[from] !== undefined && ratesToUse[from]! > 0)
+    ? ratesToUse[from]
+    : DEFAULT_EXCHANGE_RATES_TO_USD[from];
 
+  const rateToToUsd = (ratesToUse[to] !== undefined && ratesToUse[to]! > 0)
+    ? ratesToUse[to]
+    : DEFAULT_EXCHANGE_RATES_TO_USD[to];
+  
   if (rateFromToUsd === undefined || rateToToUsd === undefined || rateFromToUsd <= 0 || rateToToUsd <= 0) {
-    console.warn(`Exchange rate not available or invalid in provided/default rates for ${from} to ${to}. Using fallback calculation or 1.`);
-    // Attempt fallback to defaults if specific rate was missing/invalid in currentRates
+    console.warn(`Exchange rate not available or invalid in provided/default rates for ${from} to ${to}. Using fallback 1.`);
+    // Attempt fallback to complete defaults if specific rate was missing/invalid in currentRates
     const defaultFrom = DEFAULT_EXCHANGE_RATES_TO_USD[from];
     const defaultTo = DEFAULT_EXCHANGE_RATES_TO_USD[to];
     if(defaultFrom && defaultTo && defaultFrom > 0 && defaultTo > 0) {
@@ -81,7 +86,7 @@ export function getExchangeRate(from: Currency, to: Currency, currentRates: Exch
   return rateFromToUsd / rateToToUsd;
 }
 
-export function convertCurrency(amount: number, from: Currency, to: Currency, currentRates: ExchangeRates): number {
+export function convertCurrency(amount: number, from: Currency, to: Currency, currentRates?: ExchangeRates): number {
   const rate = getExchangeRate(from, to, currentRates);
   return amount * rate;
 }

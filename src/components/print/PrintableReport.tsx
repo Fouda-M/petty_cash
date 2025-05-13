@@ -5,14 +5,14 @@ import * as React from "react";
 import type { Transaction, ExchangeRates } from "@/types";
 import { TransactionType } from "@/types";
 import { Currency, CURRENCIES_INFO, CONVERSION_TARGET_CURRENCIES, getCurrencyInfo } from "@/lib/constants";
-import { convertCurrency, getExchangeRate, DEFAULT_EXCHANGE_RATES_TO_USD } from "@/lib/exchangeRates";
+import { convertCurrency, getExchangeRate } from "@/lib/exchangeRates";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { arSA } from "date-fns/locale";
 
 interface PrintableReportProps {
   transactions: Transaction[];
-  exchangeRates: ExchangeRates;
+  exchangeRates: ExchangeRates; // Ensure this prop is always provided
 }
 
 interface TransactionDetailPrint {
@@ -62,7 +62,8 @@ const formatCurrencyDisplayPrint = (
 
 export default function PrintableReport({ transactions, exchangeRates }: PrintableReportProps) {
   const [reportGeneratedDate, setReportGeneratedDate] = React.useState<Date | null>(null);
-  const currentExchangeRates = exchangeRates || DEFAULT_EXCHANGE_RATES_TO_USD;
+  // No longer defaulting here, expect exchangeRates prop to be valid
+  // const currentExchangeRates = exchangeRates || DEFAULT_EXCHANGE_RATES_TO_USD;
 
   React.useEffect(() => {
     setReportGeneratedDate(new Date());
@@ -105,7 +106,8 @@ export default function PrintableReport({ transactions, exchangeRates }: Printab
 
       transactions.forEach(t => {
         const type = t.type;
-        const convertedAmount = convertCurrency(t.amount, t.currency, targetCurrency, currentExchangeRates);
+        // Pass exchangeRates to convertCurrency
+        const convertedAmount = convertCurrency(t.amount, t.currency, targetCurrency, exchangeRates);
         const detail: TransactionDetailPrint = {
           originalCurrency: t.currency,
           originalAmount: t.amount,
@@ -140,7 +142,7 @@ export default function PrintableReport({ transactions, exchangeRates }: Printab
       };
     });
     return summary;
-  }, [transactions, currentExchangeRates]);
+  }, [transactions, exchangeRates]);
 
   const renderItemizedTransactionDetailBreakdownPrint = (details: TransactionDetailPrint[], targetCurrency: Currency) => {
     if (details.length === 0) return <div className="ps-6 pe-2 mt-1 text-xs text-gray-500">لا توجد تفاصيل لهذه الفئة.</div>;
@@ -158,7 +160,8 @@ export default function PrintableReport({ transactions, exchangeRates }: Printab
               <span className="whitespace-nowrap text-end">
                 (يعادل {formatCurrencyDisplayPrint(detail.convertedAmount, targetCurrency, 'neutral')}{' '}
                 <span className="text-xs text-gray-500" dir="ltr">
-                  @{getExchangeRate(detail.originalCurrency, targetCurrency, currentExchangeRates).toFixed(4)}
+                  {/* Pass exchangeRates to getExchangeRate */}
+                  @{getExchangeRate(detail.originalCurrency, targetCurrency, exchangeRates).toFixed(4)}
                 </span>)
               </span>
             </div>
@@ -191,7 +194,8 @@ export default function PrintableReport({ transactions, exchangeRates }: Printab
             <span className="whitespace-nowrap text-end">
               (يعادل {formatCurrencyDisplayPrint(totals.totalConverted, targetCurrency, 'neutral')}{' '}
               <span className="text-xs text-gray-500" dir="ltr">
-                @{getExchangeRate(originalCurrency, targetCurrency, currentExchangeRates).toFixed(4)}
+                 {/* Pass exchangeRates to getExchangeRate */}
+                @{getExchangeRate(originalCurrency, targetCurrency, exchangeRates).toFixed(4)}
               </span>)
             </span>
           </div>

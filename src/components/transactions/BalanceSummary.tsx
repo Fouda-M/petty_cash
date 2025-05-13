@@ -6,14 +6,14 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import type { Transaction, ExchangeRates } from "@/types";
 import { TransactionType } from "@/types";
 import { Currency, CONVERSION_TARGET_CURRENCIES, getCurrencyInfo } from "@/lib/constants";
-import { convertCurrency, getExchangeRate, DEFAULT_EXCHANGE_RATES_TO_USD } from "@/lib/exchangeRates";
+import { convertCurrency, getExchangeRate } from "@/lib/exchangeRates";
 import { cn } from "@/lib/utils";
 import { Wallet, Scale, HandCoins, Receipt, ShoppingCart, Landmark } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 
 interface BalanceSummaryProps {
   transactions: Transaction[];
-  exchangeRates: ExchangeRates;
+  exchangeRates: ExchangeRates; // Ensure this prop is always provided
 }
 
 interface TransactionDetail {
@@ -36,7 +36,8 @@ interface TripProfitLossDetails {
 
 
 export default function BalanceSummary({ transactions, exchangeRates }: BalanceSummaryProps) {
-  const currentExchangeRates = exchangeRates || DEFAULT_EXCHANGE_RATES_TO_USD;
+  // No longer defaulting here, expect exchangeRates prop to be valid
+  // const currentExchangeRates = exchangeRates || DEFAULT_EXCHANGE_RATES_TO_USD;
 
   const tripProfitLossSummary = React.useMemo(() => {
     const summary: Record<Currency, TripProfitLossDetails> = {} as any;
@@ -55,7 +56,8 @@ export default function BalanceSummary({ transactions, exchangeRates }: BalanceS
 
       transactions.forEach(t => {
         const type = t.type;
-        const convertedAmount = convertCurrency(t.amount, t.currency, targetCurrency, currentExchangeRates);
+        // Pass exchangeRates to convertCurrency
+        const convertedAmount = convertCurrency(t.amount, t.currency, targetCurrency, exchangeRates);
         const detail: TransactionDetail = {
           originalCurrency: t.currency,
           originalAmount: t.amount,
@@ -93,7 +95,7 @@ export default function BalanceSummary({ transactions, exchangeRates }: BalanceS
       };
     });
     return summary;
-  }, [transactions, currentExchangeRates]);
+  }, [transactions, exchangeRates]);
 
 
   const formatCurrencyDisplay = (
@@ -148,7 +150,8 @@ export default function BalanceSummary({ transactions, exchangeRates }: BalanceS
               <span className="whitespace-nowrap text-end">
                 (يعادل {formatCurrencyDisplay(detail.convertedAmount, targetCurrency, 'neutral')}{' '}
                 <span className="text-xs text-muted-foreground/70" dir="ltr">
-                  @{getExchangeRate(detail.originalCurrency, targetCurrency, currentExchangeRates).toFixed(4)}
+                  {/* Pass exchangeRates to getExchangeRate */}
+                  @{getExchangeRate(detail.originalCurrency, targetCurrency, exchangeRates).toFixed(4)}
                 </span>)
               </span>
             </div>
@@ -188,7 +191,8 @@ export default function BalanceSummary({ transactions, exchangeRates }: BalanceS
             <span className="whitespace-nowrap text-end">
               (يعادل {formatCurrencyDisplay(totals.totalConverted, targetCurrency, 'neutral')}{' '}
               <span className="text-xs text-muted-foreground/70" dir="ltr">
-                @{getExchangeRate(originalCurrency, targetCurrency, currentExchangeRates).toFixed(4)}
+                 {/* Pass exchangeRates to getExchangeRate */}
+                @{getExchangeRate(originalCurrency, targetCurrency, exchangeRates).toFixed(4)}
               </span>)
             </span>
           </div>
@@ -305,7 +309,6 @@ export default function BalanceSummary({ transactions, exchangeRates }: BalanceS
                       <span><Landmark className="inline h-4 w-4 me-1 text-primary"/>يُخصم: عهدة المالك (لتسوية الربح):</span>
                       {formatCurrencyDisplay(details.custodyOwner, targetCurrency, 'negative')}
                     </div>
-                    {/* Displaying details of owner's custody again for clarity on what's being deducted */}
                     {renderItemizedTransactionDetailBreakdown(details.custodyOwnerDetails, targetCurrency)}
 
                     <Separator className="my-3 border-accent" />
