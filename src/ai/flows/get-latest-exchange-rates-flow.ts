@@ -15,10 +15,6 @@ import {
     GetLatestExchangeRatesFlowOutputSchema,
     type GetLatestExchangeRatesFlowOutput as AppGetLatestExchangeRatesOutput
 } from '@/ai/schemas';
-// Currency and CURRENCIES_INFO might still be needed if used for other logic, not just schema definition.
-// import { Currency, CURRENCIES_INFO } from '@/lib/constants'; 
-// AppExchangeRates is used as the underlying type for GetLatestExchangeRatesFlowOutputSchema refinement.
-// import type { ExchangeRates as AppExchangeRates } from '@/types';
 
 
 // Type for the flow, now imported via AppGetLatestExchangeRatesOutput alias
@@ -31,10 +27,11 @@ export async function getLatestExchangeRates(): Promise<GetLatestExchangeRatesOu
 
 const getRatesPrompt = ai.definePrompt({
     name: 'getLatestExchangeRatesPrompt',
-    system: 'You are an assistant that helps fetch the latest exchange rates. Use the available tool to get this information and provide the result as your output.',
+    system: 'You are an assistant that helps fetch the latest exchange rates. Use the available tool for this task.',
     tools: [fetchExchangeRatesTool],
     inputSchema: z.object({}).describe("No specific input needed for this prompt"),
-    outputSchema: ExchangeRateToolOutputSchema, // Use imported schema from ai/schemas.ts
+    outputSchema: ExchangeRateToolOutputSchema,
+    prompt: 'Please fetch the latest exchange rates and provide the result structured according to the defined output schema.', // Added user-like instruction
 });
 
 
@@ -67,3 +64,4 @@ const getLatestExchangeRatesFlow = ai.defineFlow(
     throw new Error('Could not retrieve exchange rates.');
   }
 );
+
