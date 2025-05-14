@@ -17,8 +17,10 @@ import { Label } from "@/components/ui/label";
 import type { ExchangeRates } from "@/types";
 import { Currency, CURRENCIES_INFO } from "@/lib/constants";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, RefreshCw } from "lucide-react";
+import { Loader2, RefreshCw, CalendarIcon } from "lucide-react"; // Added CalendarIcon
 import { getLatestExchangeRates } from "@/ai/flows/get-latest-exchange-rates-flow";
+import { DatePicker } from "@/components/ui/date-picker"; // Import DatePicker
+import { format } from 'date-fns'; // To format date for the flow
 
 interface ExchangeRateManagerProps {
   isOpen: boolean;
@@ -43,6 +45,8 @@ export default function ExchangeRateManager({
 
   const [isSaving, setIsSaving] = React.useState(false);
   const [isFetchingRates, setIsFetchingRates] = React.useState(false);
+  const [selectedDate, setSelectedDate] = React.useState<Date | undefined>(undefined); // State for DatePicker
+  const [fetchStatus, setFetchStatus] = React.useState<string>(""); // To show if rates are latest or for a date
   const { toast } = useToast();
 
   React.useEffect(() => {
@@ -52,6 +56,9 @@ export default function ExchangeRateManager({
         updatedStrings[currencyInfo.code] = currentRates[currencyInfo.code]?.toString() || "";
       }
       setEditableRateStrings(updatedStrings);
+      // Reset selected date and fetch status when dialog opens
+      setSelectedDate(undefined); 
+      setFetchStatus("");
     }
   }, [currentRates, isOpen]);
 
@@ -59,10 +66,12 @@ export default function ExchangeRateManager({
     setEditableRateStrings((prev) => ({ ...prev, [currency]: value }));
   };
 
-  const handleFetchLatestRates = async () => {
+  const handleFetchRates = async () => {
     setIsFetchingRates(true);
+    setFetchStatus(selectedDate ? `جاري جلب الأسعار للتاريخ: ${format(selectedDate, 'yyyy-MM-dd')}...` : "جاري جلب أحدث الأسعار...");
     try {
-      const fetchedRatesOutput = await getLatestExchangeRates(); // Call the Genkit flow
+      // Pass selectedDate (if any) to the Genkit flow
+      const fetchedRatesOutput = await getLatestExchangeRates(selectedDate); 
       
       const newRateStrings: Record<Currency, string> = {} as Record<Currency, string>;
       let allValidFromFlow = true;
@@ -81,17 +90,21 @@ export default function ExchangeRateManager({
       newRateStrings[Currency.USD] = "1"; // Ensure USD is 1
 
       setEditableRateStrings(newRateStrings);
+      const fetchDateMsg = selectedDate ? `للتاريخ ${format(selectedDate, 'yyyy-MM-dd')}` : "الأحدث";
+      setFetchStatus(allValidFromFlow ? `تم جلب أسعار الصرف ${fetchDateMsg}` : `تم جلب بعض أسعار الصرف ${fetchDateMsg}`);
       toast({
         title: allValidFromFlow ? "تم جلب أسعار الصرف" : "تم جلب بعض أسعار الصرف",
-        description: allValidFromFlow ? "تم تحديث الحقول بأسعار الصرف الجديدة. راجعها ثم اضغط حفظ." : "بعض الأسعار لم يتم جلبها بشكل صحيح أو بقيت كما هي. راجعها ثم اضغط حفظ.",
+        description: `تم تحديث الحقول بأسعار الصرف ${fetchDateMsg}. راجعها ثم اضغط حفظ.`,
       });
 
     } catch (error) {
-      console.error("Error fetching latest exchange rates:", error);
+      console.error("Error fetching exchange rates:", error);
+      const errorDateMsg = selectedDate ? `للتاريخ ${format(selectedDate, 'yyyy-MM-dd')}` : "الأحدث";
+      setFetchStatus(`خطأ في جلب الأسعار ${errorDateMsg}.`);
       toast({
         variant: "destructive",
         title: "خطأ في جلب الأسعار",
-        description: error instanceof Error ? error.message : "لم يتمكن من جلب أحدث أسعار الصرف.",
+        description: error instanceof Error ? error.message : `لم يتمكن من جلب أسعار الصرف ${errorDateMsg}.`,
       });
     } finally {
       setIsFetchingRates(false);
@@ -130,7 +143,7 @@ export default function ExchangeRateManager({
         title: "تم حفظ أسعار الصرف",
         description: "تم تحديث أسعار الصرف بنجاح.",
       });
-      onOpenChange(false);
+      onOpenChange(false); // Close dialog on successful save
     }
     setIsSaving(false);
   };
@@ -141,26 +154,34 @@ export default function ExchangeRateManager({
         <DialogHeader>
           <DialogTitle>إدارة أسعار الصرف (مقابل الدولار الأمريكي)</DialogTitle>
           <DialogDescription>
-            عدّل أسعار صرف العملات. السعر هو قيمة الوحدة الواحدة من العملة بالدولار الأمريكي. الدولار الأمريكي ثابت عند 1.
+            اختر تاريخًا لجلب أسعار صرف تاريخية، أو اتركه فارغًا لجلب أحدث الأسعار. السعر هو قيمة الوحدة الواحدة من العملة بالدولار الأمريكي. الدولار الأمريكي ثابت عند 1.
           </DialogDescription>
         </DialogHeader>
 
-        <Button 
-            type="button" 
-            onClick={handleFetchLatestRates} 
-            disabled={isFetchingRates || isSaving} 
-            variant="outline" 
-            className="w-full my-3" // Added margin
-        >
-            {isFetchingRates ? (
-                <Loader2 className="ms-2 h-4 w-4 animate-spin" />
-            ) : (
-                <RefreshCw className="ms-2 h-4 w-4" />
-            )}
-            الحصول على أسعار الصرف بشكل تلقائي
-        </Button>
+        <div className="grid grid-cols-1 gap-4 my-3">
+          <div className="space-y-2">
+            <Label htmlFor="fetch-date">تاريخ أسعار الصرف (اختياري)</Label>
+            <DatePicker date={selectedDate} setDate={setSelectedDate} />
+          </div>
+          <Button 
+              type="button" 
+              onClick={handleFetchRates} 
+              disabled={isFetchingRates || isSaving} 
+              variant="outline" 
+              className="w-full"
+          >
+              {isFetchingRates ? (
+                  <Loader2 className="ms-2 h-4 w-4 animate-spin" />
+              ) : (
+                  <RefreshCw className="ms-2 h-4 w-4" />
+              )}
+              {selectedDate ? 'جلب الأسعار للتاريخ المحدد' : 'جلب أحدث أسعار الصرف'}
+          </Button>
+          {fetchStatus && <p className="text-sm text-muted-foreground text-center">{fetchStatus}</p>}
+        </div>
 
-        <div className="space-y-4 py-2 max-h-[calc(60vh-80px)] overflow-y-auto px-1"> {/* Adjusted max-h and py */}
+
+        <div className="space-y-4 py-2 max-h-[calc(50vh-120px)] overflow-y-auto px-1"> {/* Adjusted max-h */}
           {CURRENCIES_INFO.map((currencyInfo) => (
             <div key={currencyInfo.code} className="grid grid-cols-3 items-center gap-4">
               <Label htmlFor={`rate-${currencyInfo.code}`} className="col-span-1 text-sm">
