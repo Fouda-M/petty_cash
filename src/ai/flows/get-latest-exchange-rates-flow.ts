@@ -27,11 +27,11 @@ export async function getLatestExchangeRates(): Promise<GetLatestExchangeRatesOu
 
 const getRatesPrompt = ai.definePrompt({
     name: 'getLatestExchangeRatesPrompt',
-    system: 'You are an assistant that helps fetch the latest exchange rates. You MUST use the available tool for this task. Provide only the JSON data from the tool as your final response.',
+    system: 'You are an assistant whose sole task is to fetch the latest currency exchange rates using the provided "fetchExchangeRatesTool".',
     tools: [fetchExchangeRatesTool],
     inputSchema: z.object({}).describe("No specific input needed for this prompt"),
     outputSchema: ExchangeRateToolOutputSchema, // LLM should output data conforming to this
-    prompt: 'Fetch the latest exchange rates using the available tool. Then, provide the fetched rates *only* as a JSON object conforming to the output schema. Do not include any other text, conversation, or explanation.',
+    prompt: 'Retrieve the current exchange rates for all supported currencies against USD using the "fetchExchangeRatesTool". Your final response must be a JSON object containing these rates, strictly conforming to the "ExchangeRateToolOutputSchema". Do not include any conversational text, explanations, or markdown formatting around the JSON object.',
 });
 
 
