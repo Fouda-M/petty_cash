@@ -13,7 +13,7 @@ import { Separator } from "@/components/ui/separator";
 
 interface BalanceSummaryProps {
   transactions: Transaction[];
-  exchangeRates: ExchangeRates; // Ensure this prop is always provided
+  exchangeRates: ExchangeRates; 
 }
 
 interface TransactionDetail {
@@ -36,8 +36,6 @@ interface TripProfitLossDetails {
 
 
 export default function BalanceSummary({ transactions, exchangeRates }: BalanceSummaryProps) {
-  // No longer defaulting here, expect exchangeRates prop to be valid
-  // const currentExchangeRates = exchangeRates || DEFAULT_EXCHANGE_RATES_TO_USD;
 
   const tripProfitLossSummary = React.useMemo(() => {
     const summary: Record<Currency, TripProfitLossDetails> = {} as any;
@@ -56,7 +54,6 @@ export default function BalanceSummary({ transactions, exchangeRates }: BalanceS
 
       transactions.forEach(t => {
         const type = t.type;
-        // Pass exchangeRates to convertCurrency
         const convertedAmount = convertCurrency(t.amount, t.currency, targetCurrency, exchangeRates);
         const detail: TransactionDetail = {
           originalCurrency: t.currency,
@@ -115,7 +112,7 @@ export default function BalanceSummary({ transactions, exchangeRates }: BalanceS
         amountClass = "text-[hsl(var(--negative-balance-fg))]";
         break;
       case 'neutral':
-        amountClass = "text-foreground";
+        amountClass = "text-foreground"; // For neutral amounts in breakdowns
         break;
       case 'default':
       default:
@@ -150,7 +147,6 @@ export default function BalanceSummary({ transactions, exchangeRates }: BalanceS
               <span className="whitespace-nowrap text-end">
                 (يعادل {formatCurrencyDisplay(detail.convertedAmount, targetCurrency, 'neutral')}{' '}
                 <span className="text-xs text-muted-foreground/70" dir="ltr">
-                  {/* Pass exchangeRates to getExchangeRate */}
                   @{getExchangeRate(detail.originalCurrency, targetCurrency, exchangeRates).toFixed(4)}
                 </span>)
               </span>
@@ -191,7 +187,6 @@ export default function BalanceSummary({ transactions, exchangeRates }: BalanceS
             <span className="whitespace-nowrap text-end">
               (يعادل {formatCurrencyDisplay(totals.totalConverted, targetCurrency, 'neutral')}{' '}
               <span className="text-xs text-muted-foreground/70" dir="ltr">
-                 {/* Pass exchangeRates to getExchangeRate */}
                 @{getExchangeRate(originalCurrency, targetCurrency, exchangeRates).toFixed(4)}
               </span>)
             </span>
@@ -222,109 +217,111 @@ export default function BalanceSummary({ transactions, exchangeRates }: BalanceS
   return (
     <Card className="shadow-lg">
       <CardHeader>
-        <CardTitle className="flex items-center">
-          <Scale className="ms-2 h-6 w-6 text-primary" />
+        <CardTitle className="flex items-center text-xl">
+          <Scale className="ms-2 h-7 w-7 text-primary" />
           ملخص ربحية الرحلات
         </CardTitle>
         <CardDescription>
           تحليل إجمالي الإيرادات (متضمنًا العهد من العملاء ومن المالك)، المصروفات، وأجرة السائق المحولة لعملات رئيسية لتحديد ربحية الرحلات.
         </CardDescription>
       </CardHeader>
-      <CardContent>
-        <div>
-          <div className="space-y-4">
-            {CONVERSION_TARGET_CURRENCIES.map(targetCurrency => {
-              const details = tripProfitLossSummary[targetCurrency];
-              if (!details) return null;
-              const currencyName = getCurrencyInfo(targetCurrency)?.name || targetCurrency;
+      <CardContent className="space-y-6">
+        {CONVERSION_TARGET_CURRENCIES.map(targetCurrency => {
+          const details = tripProfitLossSummary[targetCurrency];
+          if (!details) return null;
+          const currencyInfo = getCurrencyInfo(targetCurrency);
+          const currencyName = currencyInfo?.name || targetCurrency;
+          const currencySymbol = currencyInfo?.symbol || targetCurrency;
 
-              const totalInitialIncomeAndCustody = details.revenueAndClientCustody + details.custodyOwner;
-              const netProfitBeforeDriverFee = totalInitialIncomeAndCustody - details.expense;
-              const profitBeforeOwnerCustodySettlement = netProfitBeforeDriverFee - details.driverFee;
-              const finalNetProfitAfterOwnerCustodySettlement = profitBeforeOwnerCustodySettlement - details.custodyOwner;
+          const totalInitialIncomeAndCustody = details.revenueAndClientCustody + details.custodyOwner;
+          const netProfitBeforeDriverFee = totalInitialIncomeAndCustody - details.expense;
+          const profitBeforeOwnerCustodySettlement = netProfitBeforeDriverFee - details.driverFee;
+          const finalNetProfitAfterOwnerCustodySettlement = profitBeforeOwnerCustodySettlement - details.custodyOwner;
 
-              return (
-                <div key={`profit-loss-${targetCurrency}`} className="p-4 bg-muted/30 rounded-lg shadow">
-                  <h4 className="font-medium text-md mb-3 text-center border-b pb-2">
-                    تفصيل العمليات بالـ{currencyName}
-                  </h4>
-                  <div className="space-y-2 text-sm">
-                    {/* Step 1: ايراد الرحلات + العهدة المستلمة من العميل */}
-                    <div className="flex justify-between items-center">
-                      <span><Receipt className="inline h-4 w-4 me-1 text-primary" />إجمالي إيرادات الرحلات والعهد من العملاء:</span>
-                      {formatCurrencyDisplay(details.revenueAndClientCustody, targetCurrency, 'positive')}
-                    </div>
-                    {renderItemizedTransactionDetailBreakdown(details.revenueAndClientCustodyDetails, targetCurrency)}
-
-                    {/* Step 2: + العهدة المستلمة من صاحب السيارة */}
-                    <div className="flex justify-between items-center mt-2">
-                      <span><Landmark className="inline h-4 w-4 me-1 text-primary" />يُضاف: العهدة المستلمة من المالك:</span>
-                      {formatCurrencyDisplay(details.custodyOwner, targetCurrency, 'positive')}
-                    </div>
-                    {renderItemizedTransactionDetailBreakdown(details.custodyOwnerDetails, targetCurrency)}
-
-                    <Separator className="my-2.5" />
-                    <div className="flex justify-between items-center">
-                      <span className="font-semibold">المجموع الفرعي (الإيرادات والعهد الإجمالية):</span>
-                      {formatCurrencyDisplay(totalInitialIncomeAndCustody, targetCurrency, 'default')}
-                    </div>
-                    <Separator className="my-2.5" />
-
-                    {/* Step 3: يطرح منها اجمالى المصروفات */}
-                    <div className="flex justify-between items-center">
-                      <span><ShoppingCart className="inline h-4 w-4 me-1 text-primary" />يُطرح: إجمالي المصروفات:</span>
-                      {formatCurrencyDisplay(details.expense, targetCurrency, 'negative')}
-                    </div>
-                    {renderAggregatedTransactionDetailBreakdown(details.expenseDetails, targetCurrency)}
-
-                    <Separator className="my-2.5" />
-
-                    {/* Step 4: صافى الربح قبل اجرة السائق */}
-                    <div className="flex justify-between items-center">
-                      <span className="font-semibold">صافي الربح قبل أجرة السائق:</span>
-                      {formatCurrencyDisplay(netProfitBeforeDriverFee, targetCurrency, 'default')}
-                    </div>
-
-                    <Separator className="my-2.5" />
-
-                    {/* Step 5: ثم تطرح اجرة السائق */}
-                    <div className="flex justify-between items-center">
-                      <span><HandCoins className="inline h-4 w-4 me-1 text-primary" />يُطرح: أجرة السائق:</span>
-                      {formatCurrencyDisplay(details.driverFee, targetCurrency, 'negative')}
-                    </div>
-                    {renderAggregatedTransactionDetailBreakdown(details.driverFeeDetails, targetCurrency)}
-
-                    <Separator className="my-3 border-primary/50" />
-
-                    {/* Step 6: النتيجة صافى الرحلة قبل تسوية عهدة المالك */}
-                    <div className="flex justify-between items-center text-md pt-1">
-                      <span className="font-semibold">الربح/الخسارة التشغيلية (قبل تسوية عهدة المالك):</span>
-                      {formatCurrencyDisplay(profitBeforeOwnerCustodySettlement, targetCurrency, 'default')}
-                    </div>
-                    
-                    <Separator className="my-2.5" />
-
-                    {/* New Step: Deduct Owner's Custody for final settlement */}
-                    <div className="flex justify-between items-center">
-                      <span><Landmark className="inline h-4 w-4 me-1 text-primary"/>يُخصم: عهدة المالك (لتسوية الربح):</span>
-                      {formatCurrencyDisplay(details.custodyOwner, targetCurrency, 'negative')}
-                    </div>
-                    {renderItemizedTransactionDetailBreakdown(details.custodyOwnerDetails, targetCurrency)}
-
-                    <Separator className="my-3 border-accent" />
-                                
-                    {/* Final Net Profit After Owner Custody Deduction */}
-                    <div className="flex justify-between items-center text-lg pt-1">
-                      <span className="font-bold text-[hsl(var(--primary))]">صافي ربح/خسارة الرحلة النهائي (بعد تسوية عهدة المالك):</span>
-                      {formatCurrencyDisplay(finalNetProfitAfterOwnerCustodySettlement, targetCurrency, 'default')}
-                    </div>
-                  </div>
+          return (
+            <Card key={`profit-loss-${targetCurrency}`} className="shadow-md">
+              <CardHeader>
+                <CardTitle className="text-lg text-center">
+                  تفصيل العمليات بالـ{currencyName} ({currencySymbol})
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                {/* Step 1: ايراد الرحلات + العهدة المستلمة من العميل */}
+                <div className="flex justify-between items-center">
+                  <span className="font-medium"><Receipt className="inline h-4 w-4 me-1.5 text-primary" />إجمالي إيرادات الرحلات والعهد من العملاء:</span>
+                  {formatCurrencyDisplay(details.revenueAndClientCustody, targetCurrency, 'positive')}
                 </div>
-              );
-            })}
-          </div>
-        </div>
+                {renderItemizedTransactionDetailBreakdown(details.revenueAndClientCustodyDetails, targetCurrency)}
+
+                {/* Step 2: + العهدة المستلمة من صاحب السيارة */}
+                <div className="flex justify-between items-center mt-2">
+                  <span className="font-medium"><Landmark className="inline h-4 w-4 me-1.5 text-primary" />يُضاف: العهدة المستلمة من المالك:</span>
+                  {formatCurrencyDisplay(details.custodyOwner, targetCurrency, 'positive')}
+                </div>
+                {renderItemizedTransactionDetailBreakdown(details.custodyOwnerDetails, targetCurrency)}
+
+                <Separator className="my-3" />
+                <div className="flex justify-between items-center font-semibold text-base">
+                  <span>المجموع الفرعي (الإيرادات والعهد الإجمالية):</span>
+                  {formatCurrencyDisplay(totalInitialIncomeAndCustody, targetCurrency, 'default')}
+                </div>
+                <Separator className="my-3" />
+
+                {/* Step 3: يطرح منها اجمالى المصروفات */}
+                <div className="flex justify-between items-center">
+                  <span className="font-medium"><ShoppingCart className="inline h-4 w-4 me-1.5 text-primary" />يُطرح: إجمالي المصروفات:</span>
+                  {formatCurrencyDisplay(details.expense, targetCurrency, 'negative')}
+                </div>
+                {renderAggregatedTransactionDetailBreakdown(details.expenseDetails, targetCurrency)}
+
+                <Separator className="my-3" />
+
+                {/* Step 4: صافى الربح قبل اجرة السائق */}
+                <div className="flex justify-between items-center font-semibold text-base">
+                  <span>صافي الربح قبل أجرة السائق:</span>
+                  {formatCurrencyDisplay(netProfitBeforeDriverFee, targetCurrency, 'default')}
+                </div>
+
+                <Separator className="my-3" />
+
+                {/* Step 5: ثم تطرح اجرة السائق */}
+                <div className="flex justify-between items-center">
+                  <span className="font-medium"><HandCoins className="inline h-4 w-4 me-1.5 text-primary" />يُطرح: أجرة السائق:</span>
+                  {formatCurrencyDisplay(details.driverFee, targetCurrency, 'negative')}
+                </div>
+                {renderAggregatedTransactionDetailBreakdown(details.driverFeeDetails, targetCurrency)}
+
+                <Separator className="my-3.5 border-primary/60" />
+
+                {/* Step 6: النتيجة صافى الرحلة قبل تسوية عهدة المالك */}
+                <div className="flex justify-between items-center text-md font-semibold">
+                  <span>الربح/الخسارة التشغيلية (قبل تسوية عهدة المالك):</span>
+                  {formatCurrencyDisplay(profitBeforeOwnerCustodySettlement, targetCurrency, 'default')}
+                </div>
+                
+                <Separator className="my-3" />
+
+                {/* New Step: Deduct Owner's Custody for final settlement */}
+                <div className="flex justify-between items-center">
+                  <span className="font-medium"><Landmark className="inline h-4 w-4 me-1.5 text-primary"/>يُخصم: عهدة المالك (لتسوية الربح):</span>
+                  {formatCurrencyDisplay(details.custodyOwner, targetCurrency, 'negative')}
+                </div>
+                {renderItemizedTransactionDetailBreakdown(details.custodyOwnerDetails, targetCurrency)}
+
+                <Separator className="my-4 border-accent" />
+                            
+                {/* Final Net Profit After Owner Custody Deduction */}
+                <div className="flex justify-between items-center text-lg">
+                  <span className="font-bold text-[hsl(var(--primary))]">صافي ربح/خسارة الرحلة النهائي (بعد تسوية عهدة المالك):</span>
+                  {formatCurrencyDisplay(finalNetProfitAfterOwnerCustodySettlement, targetCurrency, 'default')}
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
       </CardContent>
     </Card>
   );
 }
+
+
