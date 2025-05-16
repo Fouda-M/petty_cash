@@ -142,9 +142,9 @@ export default function BalanceSummary({ transactions, exchangeRates }: BalanceS
             prefix = "↳ عهدة مالك من";
           }
           return (
-            <div key={index} className="flex justify-between items-center py-0.5">
+            <div key={index} className="flex flex-col items-start sm:flex-row sm:justify-between sm:items-center py-0.5">
               <span className="whitespace-nowrap">{prefix} {getCurrencyInfo(detail.originalCurrency)?.name || detail.originalCurrency}: {formatCurrencyDisplay(detail.originalAmount, detail.originalCurrency, 'neutral')}</span>
-              <span className="whitespace-nowrap text-end">
+              <span className="whitespace-nowrap text-start sm:text-end">
                 (يعادل {formatCurrencyDisplay(detail.convertedAmount, targetCurrency, 'neutral')}{' '}
                 <span className="text-xs text-muted-foreground/70" dir="ltr">
                   @{getExchangeRate(detail.originalCurrency, targetCurrency, exchangeRates).toFixed(4)}
@@ -180,11 +180,11 @@ export default function BalanceSummary({ transactions, exchangeRates }: BalanceS
     return (
       <div className="ps-6 pe-2 mt-1 text-xs text-muted-foreground space-y-0.5 border-s border-dashed border-primary/50 ms-2">
         {Array.from(aggregated.entries()).map(([originalCurrency, totals], index) => (
-          <div key={index} className="flex justify-between items-center py-0.5">
+          <div key={index} className="flex flex-col items-start sm:flex-row sm:justify-between sm:items-center py-0.5">
             <span className="whitespace-nowrap">
               ↳ منها بالـ{getCurrencyInfo(originalCurrency)?.name || originalCurrency}: {formatCurrencyDisplay(totals.totalOriginal, originalCurrency, 'neutral')}
             </span>
-            <span className="whitespace-nowrap text-end">
+            <span className="whitespace-nowrap text-start sm:text-end">
               (يعادل {formatCurrencyDisplay(totals.totalConverted, targetCurrency, 'neutral')}{' '}
               <span className="text-xs text-muted-foreground/70" dir="ltr">
                 @{getExchangeRate(originalCurrency, targetCurrency, exchangeRates).toFixed(4)}
@@ -324,4 +324,4 @@ export default function BalanceSummary({ transactions, exchangeRates }: BalanceS
   );
 }
 
-
+    
