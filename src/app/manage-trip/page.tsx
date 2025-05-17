@@ -411,3 +411,5 @@ export default function ManageTripPage() {
     </div>
   );
 }
+
+    
