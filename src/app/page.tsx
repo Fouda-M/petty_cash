@@ -27,17 +27,16 @@ export default function EntryPage() {
               تسجيل رحلة جديدة
             </Button>
           </Link>
-          <Button 
-            size="lg" 
-            variant="outline" 
-            className="w-full sm:w-auto text-lg py-7 px-8 shadow-lg hover:shadow-xl transition-shadow" 
-            disabled // Placeholder for now
-            aria-disabled="true"
-            title="قريباً: استعراض الرحلات السابقة"
-          >
-            <History className="ms-2 h-6 w-6" />
-            الرحلات السابقة
-          </Button>
+          <Link href="/saved-trips" passHref legacyBehavior>
+            <Button 
+              size="lg" 
+              variant="outline" 
+              className="w-full sm:w-auto text-lg py-7 px-8 shadow-lg hover:shadow-xl transition-shadow"
+            >
+              <History className="ms-2 h-6 w-6" />
+              الرحلات السابقة
+            </Button>
+          </Link>
         </div>
       </div>
       <footer className="absolute bottom-8 text-center text-muted-foreground text-sm">

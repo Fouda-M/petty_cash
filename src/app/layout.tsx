@@ -4,7 +4,8 @@ import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
 import Logo from '@/components/shared/Logo';
 import { cn } from '@/lib/utils';
-import CurrentYear from '@/components/shared/CurrentYear'; // Import the new component
+import CurrentYear from '@/components/shared/CurrentYear';
+import Link from 'next/link'; // Import Link
 
 const geistSans = GeistSans;
 
@@ -30,7 +31,9 @@ export default function RootLayout({
         <div className="flex flex-col min-h-screen">
           <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 no-print">
             <div className="container flex h-16 items-center">
-              <Logo />
+              <Link href="/" passHref>
+                <Logo />
+              </Link>
             </div>
           </header>
           <main className="flex-1">
