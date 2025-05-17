@@ -11,11 +11,10 @@ import type { Transaction, ExchangeRates } from "@/types";
 import { TransactionType } from "@/types";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { Printer, Settings } from "lucide-react";
+import { Printer, Settings, ArrowRight } from "lucide-react";
 import { loadExchangeRates, saveExchangeRates } from "@/lib/exchangeRates";
 import ExchangeRateManager from "@/components/settings/ExchangeRateManager";
-import Link from "next/link"; // For navigating back
-import { ArrowRight } from "lucide-react"; // For back button icon
+import Link from "next/link"; 
 
 import {
   Dialog,
@@ -49,7 +48,7 @@ export default function ManageTripPage() {
           if (type === 'CUSTODY_HANDOVER') { // Legacy type conversion
             type = TransactionType.CUSTODY_HANDOVER_OWNER;
           } else if (!Object.values(TransactionType).includes(type as TransactionType)) {
-            console.warn(\`Invalid transaction type "\${t.type}" found for transaction ID "\${t.id}". Defaulting to EXPENSE.\`);
+            console.warn(`Invalid transaction type "${t.type}" found for transaction ID "${t.id}". Defaulting to EXPENSE.`);
             type = TransactionType.EXPENSE;
           }
           return {
@@ -129,7 +128,7 @@ export default function ManageTripPage() {
             margin: 0.5,
             filename: "transactions-report.pdf",
             image: { type: "jpeg", quality: 0.98 },
-            html2canvas: { scale: 2, useCORS: true, logging: false }, // Added logging: false
+            html2canvas: { scale: 2, useCORS: true, logging: false }, 
             jsPDF: { unit: "in", format: "a4", orientation: "portrait" }
           })
           .from(element)
