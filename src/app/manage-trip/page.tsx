@@ -14,7 +14,7 @@ import type { TripDetailsFormData } from "@/lib/schemas";
 import { TransactionType } from "@/types";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { Printer, Settings, ArrowRight, Save, ListChecks } from "lucide-react";
+import { Printer, Settings, ArrowRight, Save, ListChecks, Loader2 } from "lucide-react"; // Added Loader2
 import { loadExchangeRates, saveExchangeRates, DEFAULT_EXCHANGE_RATES_TO_USD } from "@/lib/exchangeRates";
 import ExchangeRateManager from "@/components/settings/ExchangeRateManager";
 import Link from "next/link";
