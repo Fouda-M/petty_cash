@@ -3,6 +3,7 @@
 
 import * as React from "react";
 import Link from 'next/link';
+import { useRouter } from 'next/navigation'; // Import useRouter
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import {
@@ -22,6 +23,7 @@ import { arSA } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
 
 const ALL_SAVED_TRIPS_KEY = "allSavedTrips_v1";
+const EDITING_TRIP_ID_KEY = "editingTripId_v1"; // Key for trip ID to be edited
 
 export default function SavedTripsPage() {
   const [savedTrips, setSavedTrips] = React.useState<SavedTrip[]>([]);
@@ -29,6 +31,7 @@ export default function SavedTripsPage() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = React.useState(false);
   const [tripToDelete, setTripToDelete] = React.useState<SavedTrip | null>(null);
   const { toast } = useToast();
+  const router = useRouter(); // Initialize router
 
   React.useEffect(() => {
     setIsLoading(true);
@@ -80,10 +83,13 @@ export default function SavedTripsPage() {
   };
 
   const handleEditRequest = (tripId: string) => {
-    // For now, this is a placeholder.
-    // In the future, this would likely set an ID in localStorage and navigate to /manage-trip
-    // which would then load this trip's data.
-    toast({ title: "قيد التطوير", description: "سيتم تفعيل خاصية تعديل الرحلة قريبًا." });
+    try {
+      localStorage.setItem(EDITING_TRIP_ID_KEY, tripId);
+      router.push('/manage-trip');
+    } catch (error) {
+      console.error("Error setting trip for editing:", error);
+      toast({ variant: "destructive", title: "خطأ", description: "لم يتمكن من تجهيز الرحلة للتعديل." });
+    }
   };
 
   if (isLoading) {
@@ -165,10 +171,9 @@ export default function SavedTripsPage() {
                     size="sm" 
                     className="flex-1" 
                     onClick={() => handleEditRequest(trip.id)}
-                    disabled // Disabled for now
                   >
                     <Edit className="ms-1 h-3.5 w-3.5" />
-                    تعديل (قريبًا)
+                    تعديل
                   </Button>
                   <Button 
                     variant="destructive" 
