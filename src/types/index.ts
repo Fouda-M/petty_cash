@@ -1,5 +1,6 @@
 
 import type { Currency as CurrencyEnum } from '@/lib/constants'; // Keep original import for type usage
+import type { TripDetailsFormData } from '@/lib/schemas'; // Import TripDetailsFormData
 
 // Export Currency enum directly from here
 export enum Currency {
@@ -24,7 +25,7 @@ export interface Transaction {
   date: Date;
   description: string;
   amount: number;
-  currency: Currency; 
+  currency: Currency;
   type: TransactionType;
 }
 
@@ -38,11 +39,20 @@ export enum DestinationType {
   EXTERNAL = 'EXTERNAL',
 }
 
-export interface TripDetails {
+export interface TripDetails { // This interface is effectively TripDetailsFormData
   driverName: string;
   tripStartDate: Date;
   tripEndDate: Date;
   destinationType: DestinationType;
-  cityName?: string; 
+  cityName?: string;
   countryName?: string;
+}
+
+export interface SavedTrip {
+  id: string;
+  name: string; // e.g., "Driver Name - Start Date"
+  details: TripDetailsFormData; // Use the existing form data type
+  transactions: Transaction[];
+  exchangeRates: ExchangeRates;
+  createdAt: string; // ISO date string for when the trip was saved
 }

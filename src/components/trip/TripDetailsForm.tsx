@@ -3,7 +3,7 @@
 
 import * as React from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -31,58 +31,55 @@ const getBaseTripFormValues = (): Omit<TripDetailsFormData, 'tripStartDate' | 't
     tripEndDate: undefined,
 });
 
+interface TripDetailsFormProps {
+  onDetailsSubmit: (details: TripDetailsFormData) => void;
+  initialData?: TripDetailsFormData | null;
+}
 
-export default function TripDetailsForm() {
+export default function TripDetailsForm({ onDetailsSubmit, initialData }: TripDetailsFormProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
   const form = useForm<TripDetailsFormData>({
     resolver: zodResolver(tripDetailsSchema),
-    defaultValues: getBaseTripFormValues(),
+    defaultValues: initialData || getBaseTripFormValues(),
   });
 
   React.useEffect(() => {
-    // Set dates to new Date() client-side after initial render
-    // to avoid hydration mismatch.
-    const currentValues = form.getValues();
-    form.reset({
+    if (initialData) {
+      form.reset({
+        ...initialData,
+        tripStartDate: initialData.tripStartDate ? new Date(initialData.tripStartDate) : new Date(),
+        tripEndDate: initialData.tripEndDate ? new Date(initialData.tripEndDate) : new Date(),
+      });
+    } else {
+      form.reset({
         ...getBaseTripFormValues(),
-        driverName: currentValues.driverName, // Preserve existing values if any during reset
-        destinationType: currentValues.destinationType,
-        cityName: currentValues.cityName,
-        countryName: currentValues.countryName,
-        tripStartDate: currentValues.tripStartDate || new Date(),
-        tripEndDate: currentValues.tripEndDate || new Date(),
-    });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.reset]); // form.getValues removed from deps to avoid potential infinite loops
+        tripStartDate: new Date(),
+        tripEndDate: new Date(),
+      });
+    }
+  }, [initialData, form.reset, form]);
 
 
   const destinationType = form.watch("destinationType");
 
   async function onSubmit(values: TripDetailsFormData) {
     setIsSubmitting(true);
-    console.log("Trip Details Submitted: ", values);
-    // In a real app, this would involve saving to a database.
-    // For now, we simulate it.
-    await new Promise(resolve => setTimeout(resolve, 500));
+    // console.log("Trip Details Submitted to parent: ", values);
+    onDetailsSubmit(values); // Callback to parent
     toast({
-      title: "تم حفظ بيانات الرحلة",
-      description: `تم حفظ بيانات رحلة السائق ${values.driverName}.`,
+      title: "تم تحديث بيانات الرحلة مؤقتًا",
+      description: `تم تحديث بيانات رحلة السائق ${values.driverName} محليًا. اضغط "حفظ الرحلة بالكامل" في الأسفل لحفظ كل شيء.`,
     });
     setIsSubmitting(false);
-    // form.reset({ // Optionally reset form after submission
-    //     ...getBaseTripFormValues(),
-    //     tripStartDate: new Date(),
-    //     tripEndDate: new Date(),
-    // });
   }
 
   return (
     <Card className="shadow-lg no-print">
       <CardHeader>
         <CardTitle>بيانات الرحلة</CardTitle>
-        <CardDescription>أدخل تفاصيل الرحلة هنا.</CardDescription>
+        <CardDescription>أدخل تفاصيل الرحلة هنا. اضغط على "تحديث بيانات الرحلة" لتأكيد هذه التفاصيل قبل حفظ الرحلة بأكملها.</CardDescription>
       </CardHeader>
       <CardContent>
         <Form {...form}>
@@ -141,13 +138,15 @@ export default function TripDetailsForm() {
                       onValueChange={(value) => {
                         field.onChange(value);
                         if (value === DestinationType.INTERNAL) {
-                          form.setValue("countryName", ""); // Clear country name if internal
+                          form.setValue("countryName", ""); 
+                          if (!form.getValues("cityName")) form.trigger("cityName"); // Trigger validation if empty
                         } else {
-                          form.setValue("cityName", ""); // Clear city name if external
+                          form.setValue("cityName", ""); 
+                          if (!form.getValues("countryName")) form.trigger("countryName"); // Trigger validation if empty
                         }
                       }}
                       value={field.value}
-                      className="flex flex-col space-y-1 md:flex-row md:space-y-0 md:space-x-4 md:space-x-reverse" // RTL space-x-reverse
+                      className="flex flex-col space-y-1 md:flex-row md:space-y-0 md:space-x-4 md:space-x-reverse"
                     >
                       <FormItem className="flex items-center space-x-2 space-x-reverse">
                         <FormControl>
@@ -202,7 +201,7 @@ export default function TripDetailsForm() {
             
             <Button type="submit" className="w-full" disabled={isSubmitting}>
               {isSubmitting && <Loader2 className="ms-2 h-4 w-4 animate-spin" />}
-              حفظ بيانات الرحلة
+              تحديث بيانات الرحلة (مؤقتًا)
             </Button>
           </form>
         </Form>

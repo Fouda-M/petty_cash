@@ -3,6 +3,7 @@
 
 import * as React from "react";
 import type { Transaction, ExchangeRates } from "@/types";
+import type { TripDetailsFormData } from "@/lib/schemas"; // Import TripDetailsFormData
 import { TransactionType } from "@/types";
 import { Currency, CURRENCIES_INFO, CONVERSION_TARGET_CURRENCIES, getCurrencyInfo } from "@/lib/constants";
 import { convertCurrency, getExchangeRate } from "@/lib/exchangeRates";
@@ -12,7 +13,8 @@ import { arSA } from "date-fns/locale";
 
 interface PrintableReportProps {
   transactions: Transaction[];
-  exchangeRates: ExchangeRates; // Ensure this prop is always provided
+  exchangeRates: ExchangeRates;
+  tripDetails: TripDetailsFormData | null; // Add tripDetails prop
 }
 
 interface TransactionDetailPrint {
@@ -60,10 +62,8 @@ const formatCurrencyDisplayPrint = (
 };
 
 
-export default function PrintableReport({ transactions, exchangeRates }: PrintableReportProps) {
+export default function PrintableReport({ transactions, exchangeRates, tripDetails }: PrintableReportProps) {
   const [reportGeneratedDate, setReportGeneratedDate] = React.useState<Date | null>(null);
-  // No longer defaulting here, expect exchangeRates prop to be valid
-  // const currentExchangeRates = exchangeRates || DEFAULT_EXCHANGE_RATES_TO_USD;
 
   React.useEffect(() => {
     setReportGeneratedDate(new Date());
@@ -71,7 +71,7 @@ export default function PrintableReport({ transactions, exchangeRates }: Printab
 
   const aggregatedExpenses = React.useMemo(() => {
     const expensesByCurrency: Record<
-      string, 
+      string,
       { total: number; details: { description: string; amount: number }[] }
     > = {};
 
@@ -106,7 +106,6 @@ export default function PrintableReport({ transactions, exchangeRates }: Printab
 
       transactions.forEach(t => {
         const type = t.type;
-        // Pass exchangeRates to convertCurrency
         const convertedAmount = convertCurrency(t.amount, t.currency, targetCurrency, exchangeRates);
         const detail: TransactionDetailPrint = {
           originalCurrency: t.currency,
@@ -153,14 +152,13 @@ export default function PrintableReport({ transactions, exchangeRates }: Printab
           if (detail.type === TransactionType.CUSTODY_HANDOVER_CLIENT) prefix = "↳ عهدة عميل من";
           else if (detail.type === TransactionType.REVENUE) prefix = "↳ إيراد من";
           else if (detail.type === TransactionType.CUSTODY_HANDOVER_OWNER) prefix = "↳ عهدة مالك من";
-          
+
           return (
             <div key={index} className="flex justify-between items-center py-0.5">
               <span className="whitespace-nowrap">{prefix} {getCurrencyInfo(detail.originalCurrency)?.name || detail.originalCurrency}: {formatCurrencyDisplayPrint(detail.originalAmount, detail.originalCurrency, 'neutral')}</span>
               <span className="whitespace-nowrap text-end">
                 (يعادل {formatCurrencyDisplayPrint(detail.convertedAmount, targetCurrency, 'neutral')}{' '}
                 <span className="text-xs text-gray-500" dir="ltr">
-                  {/* Pass exchangeRates to getExchangeRate */}
                   @{getExchangeRate(detail.originalCurrency, targetCurrency, exchangeRates).toFixed(4)}
                 </span>)
               </span>
@@ -194,7 +192,6 @@ export default function PrintableReport({ transactions, exchangeRates }: Printab
             <span className="whitespace-nowrap text-end">
               (يعادل {formatCurrencyDisplayPrint(totals.totalConverted, targetCurrency, 'neutral')}{' '}
               <span className="text-xs text-gray-500" dir="ltr">
-                 {/* Pass exchangeRates to getExchangeRate */}
                 @{getExchangeRate(originalCurrency, targetCurrency, exchangeRates).toFixed(4)}
               </span>)
             </span>
@@ -207,19 +204,28 @@ export default function PrintableReport({ transactions, exchangeRates }: Printab
 
   return (
     <div id="printable-content" className="p-4 bg-white text-black" dir="rtl">
-      <h1 className="printable-title text-center mb-6">تقرير المعاملات والربحية</h1>
+      <h1 className="printable-title text-center mb-2">تقرير المعاملات والربحية</h1>
+      {tripDetails && (
+        <div className="text-center mb-2 text-sm text-gray-700">
+            <p><strong>السائق:</strong> {tripDetails.driverName}</p>
+            <p><strong>الوجهة:</strong> {tripDetails.destinationType === "INTERNAL" ? tripDetails.cityName : tripDetails.countryName}</p>
+            <p>
+                <strong>الفترة:</strong> من {format(new Date(tripDetails.tripStartDate), "PP", { locale: arSA })} إلى {format(new Date(tripDetails.tripEndDate), "PP", { locale: arSA })}
+            </p>
+        </div>
+      )}
       {reportGeneratedDate && (
-        <p className="text-sm text-gray-600 mb-4 text-center">
+        <p className="text-xs text-gray-500 mb-4 text-center">
           تاريخ إنشاء التقرير: {format(reportGeneratedDate, "PPPpp", { locale: arSA })}
         </p>
       )}
 
-      <section className="mb-8">
+      <section className="mb-6">
         <h2 className="printable-section-title">ملخص المصروفات المفصل حسب العملة</h2>
         {Object.keys(aggregatedExpenses).length > 0 ? (
           Object.entries(aggregatedExpenses).map(([currencyCode, data]) => (
-            <div key={currencyCode} className="mb-6 p-4 printable-card">
-              <h3 className="font-semibold text-lg mb-2">
+            <div key={currencyCode} className="mb-4 p-3 printable-card">
+              <h3 className="font-semibold text-base mb-1.5">
                 المصروفات بعملة: {getCurrencyInfo(currencyCode as Currency)?.name || currencyCode}
               </h3>
               <table className="printable-table">
@@ -264,29 +270,29 @@ export default function PrintableReport({ transactions, exchangeRates }: Printab
           const finalNetProfitAfterOwnerCustodySettlement = profitBeforeOwnerCustodySettlement - details.custodyOwner;
 
           return (
-            <div key={`profit-loss-print-${targetCurrency}`} className="mb-8 p-4 printable-card">
-              <h3 className="font-semibold text-lg mb-3 text-center border-b pb-2 border-gray-300">
+            <div key={`profit-loss-print-${targetCurrency}`} className="mb-6 p-3 printable-card">
+              <h3 className="font-semibold text-base mb-2 text-center border-b pb-1.5 border-gray-300">
                 تفصيل العمليات بالـ{currencyName}
               </h3>
-              <div className="space-y-2 text-sm">
+              <div className="space-y-1.5 text-xs">
                 <div className="flex justify-between items-center">
                   <span>إجمالي إيرادات الرحلات والعهد من العملاء:</span>
                   {formatCurrencyDisplayPrint(details.revenueAndClientCustody, targetCurrency, 'positive')}
                 </div>
                 {renderItemizedTransactionDetailBreakdownPrint(details.revenueAndClientCustodyDetails, targetCurrency)}
 
-                <div className="flex justify-between items-center mt-2">
+                <div className="flex justify-between items-center mt-1.5">
                   <span>يُضاف: العهدة المستلمة من المالك:</span>
                   {formatCurrencyDisplayPrint(details.custodyOwner, targetCurrency, 'positive')}
                 </div>
                 {renderItemizedTransactionDetailBreakdownPrint(details.custodyOwnerDetails, targetCurrency)}
 
-                <hr className="my-2.5 border-gray-300" />
+                <hr className="my-2 border-gray-300" />
                 <div className="flex justify-between items-center font-semibold">
                   <span>المجموع الفرعي (الإيرادات والعهد الإجمالية):</span>
                   {formatCurrencyDisplayPrint(totalInitialIncomeAndCustody, targetCurrency, 'neutral')}
                 </div>
-                <hr className="my-2.5 border-gray-300" />
+                <hr className="my-2 border-gray-300" />
 
                 <div className="flex justify-between items-center">
                   <span>يُطرح: إجمالي المصروفات:</span>
@@ -294,12 +300,12 @@ export default function PrintableReport({ transactions, exchangeRates }: Printab
                 </div>
                 {renderAggregatedTransactionDetailBreakdownPrint(details.expenseDetails, targetCurrency)}
 
-                <hr className="my-2.5 border-gray-300" />
+                <hr className="my-2 border-gray-300" />
                 <div className="flex justify-between items-center font-semibold">
                   <span>صافي الربح قبل أجرة السائق:</span>
                   {formatCurrencyDisplayPrint(netProfitBeforeDriverFee, targetCurrency, 'neutral')}
                 </div>
-                <hr className="my-2.5 border-gray-300" />
+                <hr className="my-2 border-gray-300" />
 
                 <div className="flex justify-between items-center">
                   <span>يُطرح: أجرة السائق:</span>
@@ -307,21 +313,21 @@ export default function PrintableReport({ transactions, exchangeRates }: Printab
                 </div>
                 {renderAggregatedTransactionDetailBreakdownPrint(details.driverFeeDetails, targetCurrency)}
 
-                <hr className="my-3 border-gray-400" />
-                <div className="flex justify-between items-center text-md pt-1 font-semibold">
+                <hr className="my-2.5 border-gray-400" />
+                <div className="flex justify-between items-center text-sm pt-0.5 font-semibold">
                   <span>الربح/الخسارة التشغيلية (قبل تسوية عهدة المالك):</span>
                   {formatCurrencyDisplayPrint(profitBeforeOwnerCustodySettlement, targetCurrency, 'neutral')}
                 </div>
-                <hr className="my-2.5 border-gray-300" />
-                
+                <hr className="my-2 border-gray-300" />
+
                 <div className="flex justify-between items-center">
                   <span>يُخصم: عهدة المالك (لتسوية الربح):</span>
                   {formatCurrencyDisplayPrint(details.custodyOwner, targetCurrency, 'negative')}
                 </div>
                 {renderItemizedTransactionDetailBreakdownPrint(details.custodyOwnerDetails, targetCurrency)}
-                
-                <hr className="my-3 border-gray-500" />
-                <div className="flex justify-between items-center text-lg pt-1 font-bold">
+
+                <hr className="my-2.5 border-gray-500" />
+                <div className="flex justify-between items-center text-base pt-0.5 font-bold">
                   <span>صافي ربح/خسارة الرحلة النهائي (بعد تسوية عهدة المالك):</span>
                   {formatCurrencyDisplayPrint(finalNetProfitAfterOwnerCustodySettlement, targetCurrency, 'neutral')}
                 </div>
