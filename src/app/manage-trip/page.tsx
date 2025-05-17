@@ -8,7 +8,7 @@ import AddTransactionForm from "@/components/transactions/AddTransactionForm";
 import TransactionTable from "@/components/transactions/TransactionTable";
 import BalanceSummary from "@/components/transactions/BalanceSummary";
 import PrintableReport from "@/components/print/PrintableReport";
-import TripDetailsForm from "@/components/trip/TripDetailsForm";
+import TripDetailsForm, { type TripDetailsFormRef } from "@/components/trip/TripDetailsForm";
 import type { Transaction, ExchangeRates, SavedTrip } from "@/types";
 import type { TripDetailsFormData } from "@/lib/schemas";
 import { TransactionType } from "@/types";
@@ -29,16 +29,17 @@ import {
 
 const ALL_SAVED_TRIPS_KEY = "allSavedTrips_v1";
 const ACTIVE_TRIP_DETAILS_KEY = "activeTripDetails_v1";
-const EDITING_TRIP_ID_KEY = "editingTripId_v1"; // Key for trip ID being edited
+const EDITING_TRIP_ID_KEY = "editingTripId_v1"; 
 
 export default function ManageTripPage() {
   const router = useRouter();
   const { toast } = useToast();
+  const tripDetailsFormRef = React.useRef<TripDetailsFormRef>(null);
 
   const [transactions, setTransactions] = React.useState<Transaction[]>([]);
   const [currentTripDetails, setCurrentTripDetails] = React.useState<TripDetailsFormData | null>(null);
   const [exchangeRates, setExchangeRates] = React.useState<ExchangeRates>(() => loadExchangeRates());
-  const [editingTripId, setEditingTripId] = React.useState<string | null>(null); // To store ID of trip being edited
+  const [editingTripId, setEditingTripId] = React.useState<string | null>(null); 
   
   const [isLoading, setIsLoading] = React.useState(true);
   const [isEditModalOpen, setIsEditModalOpen] = React.useState(false);
@@ -95,7 +96,7 @@ export default function ManageTripPage() {
         } else {
           toast({ variant: "destructive", title: "خطأ", description: "لا يوجد سجل للرحلات المحفوظة للعثور على الرحلة المطلوبة." });
         }
-        localStorage.removeItem(EDITING_TRIP_ID_KEY); // Clear it after attempting to load or if not found
+        localStorage.removeItem(EDITING_TRIP_ID_KEY); 
       }
       
       if (!tripSuccessfullyLoadedForEdit) {
@@ -106,13 +107,12 @@ export default function ManageTripPage() {
       console.error("Failed to initialize trip data:", error);
       toast({ variant: "destructive", title: "خطأ في تهيئة بيانات الرحلة" });
       loadActiveOrDefaultTripData(); 
-      if (localStorage.getItem(EDITING_TRIP_ID_KEY)) { // Ensure it's cleared even on error
+      if (localStorage.getItem(EDITING_TRIP_ID_KEY)) { 
         localStorage.removeItem(EDITING_TRIP_ID_KEY);
       }
     }
     setIsLoading(false);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Changed dependency array to [] to run once on mount
+  }, []); 
 
   const loadActiveOrDefaultTripData = () => {
     const activeDetailsJson = localStorage.getItem(ACTIVE_TRIP_DETAILS_KEY);
@@ -127,7 +127,7 @@ export default function ManageTripPage() {
        setCurrentTripDetails(null);
     }
     
-    const savedTransactionsJson = localStorage.getItem("transactions"); // This is for active, unsaved trip
+    const savedTransactionsJson = localStorage.getItem("transactions"); 
     if (savedTransactionsJson) {
       const parsedTransactions = JSON.parse(savedTransactionsJson, (key, value) => {
         if (key === 'date') return new Date(value);
@@ -209,6 +209,11 @@ export default function ManageTripPage() {
       try {
         const html2pdfModule = await import('html2pdf.js');
         const html2pdf = html2pdfModule.default;
+        const detailsToPrint = await tripDetailsFormRef.current?.validateAndGetData();
+        if (!detailsToPrint && !currentTripDetails) {
+            toast({ variant: "destructive", title: "بيانات الرحلة غير كاملة للطباعة" });
+            return;
+        }
         html2pdf()
           .set({ margin: 0.5, filename: "transactions-report.pdf", image: { type: "jpeg", quality: 0.98 }, html2canvas: { scale: 2, useCORS: true, logging: false }, jsPDF: { unit: "in", format: "a4", orientation: "portrait" }})
           .from(element)
@@ -226,18 +231,22 @@ export default function ManageTripPage() {
     toast({ title: "تم تحديث أسعار الصرف" });
   };
 
-  const handleSaveFullTrip = () => {
+  const handleSaveFullTrip = async () => {
     setIsSavingFullTrip(true);
-    if (!currentTripDetails) {
+
+    const validatedTripDetails = await tripDetailsFormRef.current?.validateAndGetData();
+
+    if (!validatedTripDetails) {
       toast({
         variant: "destructive",
-        title: "بيانات الرحلة غير مكتملة",
-        description: "يرجى إدخال وحفظ بيانات الرحلة أولاً باستخدام النموذج أعلاه.",
+        title: "بيانات الرحلة غير مكتملة أو غير صالحة",
+        description: "يرجى إكمال وتصحيح بيانات الرحلة في النموذج أعلاه.",
       });
       setIsSavingFullTrip(false);
       return;
     }
-
+    
+    // For new trips, ensure there's at least one transaction
     if (transactions.length === 0 && !editingTripId) { 
         toast({
             variant: "destructive",
@@ -248,7 +257,7 @@ export default function ManageTripPage() {
         return;
     }
 
-    const tripName = `${currentTripDetails.driverName} - ${currentTripDetails.cityName || currentTripDetails.countryName} - ${format(currentTripDetails.tripStartDate, 'dd/MM/yyyy')}`;
+    const tripName = `${validatedTripDetails.driverName} - ${validatedTripDetails.cityName || validatedTripDetails.countryName} - ${format(validatedTripDetails.tripStartDate, 'dd/MM/yyyy')}`;
     
     let originalCreatedAt = new Date().toISOString();
     if (editingTripId) {
@@ -267,7 +276,7 @@ export default function ManageTripPage() {
     const tripDataToSave: SavedTrip = {
       id: editingTripId || crypto.randomUUID(), 
       name: tripName,
-      details: currentTripDetails,
+      details: validatedTripDetails, // Use validated details
       transactions: transactions,
       exchangeRates: exchangeRates,
       createdAt: editingTripId ? originalCreatedAt : new Date().toISOString(),
@@ -305,6 +314,13 @@ export default function ManageTripPage() {
       setExchangeRates(loadExchangeRates()); 
       setEditingTripId(null); 
       
+      // Reset TripDetailsForm to its base state
+      if (tripDetailsFormRef.current) {
+        // This assumes TripDetailsForm's useEffect will pick up the null initialData
+        // and reset itself. Or we can expose a reset method.
+        // For now, setting currentTripDetails to null will make initialData null.
+      }
+
       router.push('/saved-trips');
 
     } catch (error) {
@@ -350,6 +366,7 @@ export default function ManageTripPage() {
       </div>
       
       <TripDetailsForm 
+        ref={tripDetailsFormRef}
         onDetailsSubmit={handleTripDetailsUpdate} 
         initialData={currentTripDetails} 
       />
@@ -406,10 +423,8 @@ export default function ManageTripPage() {
       />
 
       <div className="print-only hidden">
-        <PrintableReport transactions={transactions} exchangeRates={exchangeRates} tripDetails={currentTripDetails} />
+        <PrintableReport transactions={transactions} exchangeRates={exchangeRates} tripDetails={currentTripDetails || (tripDetailsFormRef.current && tripDetailsFormRef.current.validateAndGetData() ? (tripDetailsFormRef.current.validateAndGetData() as unknown as TripDetailsFormData) : null) } />
       </div>
     </div>
   );
 }
-
-    
