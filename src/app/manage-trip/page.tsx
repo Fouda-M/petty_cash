@@ -64,40 +64,53 @@ export default function ManageTripPage() {
               tripStartDate: new Date(tripToLoad.details.tripStartDate),
               tripEndDate: new Date(tripToLoad.details.tripEndDate),
             });
-            const parsedTransactions = tripToLoad.transactions.map((t: any) => ({
-              ...t,
-              id: t.id || crypto.randomUUID(),
-              date: new Date(t.date),
-              type: t.type as TransactionType,
-              amount: Number(t.amount) || 0,
-            })).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+            
+            // Apply type correction logic when loading transactions for an edited trip
+            const parsedTransactions = tripToLoad.transactions.map((t: any) => {
+              let type = t.type;
+              // Correction for old 'CUSTODY_HANDOVER' type
+              if (type === 'CUSTODY_HANDOVER') {
+                console.warn(`Old transaction type "CUSTODY_HANDOVER" found for transaction ID "${t.id}" in saved trip. Correcting to CUSTODY_HANDOVER_OWNER.`);
+                type = TransactionType.CUSTODY_HANDOVER_OWNER;
+              } 
+              // Correction for any other invalid types
+              else if (!Object.values(TransactionType).includes(type as TransactionType)) {
+                console.warn(`Invalid transaction type "${t.type}" found for transaction ID "${t.id}" in saved trip. Defaulting to EXPENSE.`);
+                type = TransactionType.EXPENSE;
+              }
+              return {
+                ...t,
+                id: t.id || crypto.randomUUID(),
+                date: new Date(t.date),
+                type: type as TransactionType, // Use the corrected type
+                amount: Number(t.amount) || 0,
+              };
+            }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+            
             setTransactions(parsedTransactions);
             setExchangeRates(tripToLoad.exchangeRates);
             setEditingTripId(tripIdToEdit); // Set that we are editing this trip
             toast({ title: "تم تحميل الرحلة للتعديل", description: `يتم الآن تعديل رحلة: ${tripToLoad.name}` });
           } else {
             toast({ variant: "destructive", title: "خطأ", description: "لم يتم العثور على الرحلة المطلوبة للتعديل." });
-            // Fallback to loading active or new trip
             loadActiveOrDefaultTripData();
           }
         } else {
-           // Fallback to loading active or new trip
+          toast({ variant: "destructive", title: "خطأ", description: "لا يوجد سجل للرحلات المحفوظة للعثور على الرحلة المطلوبة." });
           loadActiveOrDefaultTripData();
         }
       } else {
-        // No specific trip to edit, load active/default
         loadActiveOrDefaultTripData();
       }
     } catch (error) {
       console.error("Failed to initialize trip data:", error);
       toast({ variant: "destructive", title: "خطأ في تهيئة بيانات الرحلة" });
-      loadActiveOrDefaultTripData(); // Fallback
+      loadActiveOrDefaultTripData(); 
     }
     setIsLoading(false);
-  }, [toast]); // Only run on initial mount
+  }, [toast]); 
 
   const loadActiveOrDefaultTripData = () => {
-    // Load active trip details
     const activeDetailsJson = localStorage.getItem(ACTIVE_TRIP_DETAILS_KEY);
     if (activeDetailsJson) {
       const parsedDetails = JSON.parse(activeDetailsJson);
@@ -110,7 +123,6 @@ export default function ManageTripPage() {
        setCurrentTripDetails(null);
     }
     
-    // Load transactions
     const savedTransactions = localStorage.getItem("transactions");
     if (savedTransactions) {
       const parsedTransactions = JSON.parse(savedTransactions, (key, value) => {
@@ -118,8 +130,14 @@ export default function ManageTripPage() {
         return value;
       }).map((t: any) => {
         let type = t.type;
-        if (type === 'CUSTODY_HANDOVER') type = TransactionType.CUSTODY_HANDOVER_OWNER;
-        else if (!Object.values(TransactionType).includes(type as TransactionType)) type = TransactionType.EXPENSE;
+        if (type === 'CUSTODY_HANDOVER') {
+            console.warn(`Old transaction type "CUSTODY_HANDOVER" found for transaction ID "${t.id}" in active data. Correcting to CUSTODY_HANDOVER_OWNER.`);
+            type = TransactionType.CUSTODY_HANDOVER_OWNER;
+        }
+        else if (!Object.values(TransactionType).includes(type as TransactionType)) {
+            console.warn(`Invalid transaction type "${t.type}" found for transaction ID "${t.id}" in active data. Defaulting to EXPENSE.`);
+            type = TransactionType.EXPENSE;
+        }
         return { ...t, id: t.id || crypto.randomUUID(), date: new Date(t.date), type: type as TransactionType, amount: Number(t.amount) || 0 };
       });
       setTransactions(parsedTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
@@ -128,19 +146,17 @@ export default function ManageTripPage() {
     }
     
     setExchangeRates(loadExchangeRates());
-    setEditingTripId(null); // Not editing a specific saved trip
+    setEditingTripId(null); 
   };
 
 
-  // Save active (non-editing mode) transactions and rates to localStorage
   React.useEffect(() => {
-    if (!isLoading && !editingTripId) { // Only save "active" if not in editing mode
+    if (!isLoading && !editingTripId) { 
       localStorage.setItem("transactions", JSON.stringify(transactions));
       saveExchangeRates(exchangeRates); 
     }
   }, [transactions, exchangeRates, isLoading, editingTripId]);
 
-  // Save active (non-editing mode) trip details to localStorage
   React.useEffect(() => {
     if (!isLoading && !editingTripId && currentTripDetails) {
       localStorage.setItem(ACTIVE_TRIP_DETAILS_KEY, JSON.stringify(currentTripDetails));
@@ -201,7 +217,7 @@ export default function ManageTripPage() {
   };
 
   const handleRatesUpdate = (newRates: ExchangeRates) => {
-    saveExchangeRates(newRates); // Persist globally immediately if not editing specific trip
+    saveExchangeRates(newRates); 
     setExchangeRates(newRates);
     toast({ title: "تم تحديث أسعار الصرف" });
   };
@@ -218,7 +234,7 @@ export default function ManageTripPage() {
       return;
     }
 
-    if (transactions.length === 0 && !editingTripId) { // Allow saving an edited trip even if txns are removed, but not a new one
+    if (transactions.length === 0 && !editingTripId) { 
         toast({
             variant: "destructive",
             title: "لا توجد معاملات",
@@ -230,14 +246,28 @@ export default function ManageTripPage() {
 
     const tripName = `${currentTripDetails.driverName} - ${currentTripDetails.cityName || currentTripDetails.countryName} - ${format(currentTripDetails.tripStartDate, 'dd/MM/yyyy')}`;
     
+    let originalCreatedAt = new Date().toISOString();
+    if (editingTripId) {
+        const allSavedTripsJsonForDate = localStorage.getItem(ALL_SAVED_TRIPS_KEY);
+        if (allSavedTripsJsonForDate) {
+            try {
+                const allSavedTripsForDate = JSON.parse(allSavedTripsJsonForDate) as SavedTrip[];
+                const existingTrip = allSavedTripsForDate.find(t => t.id === editingTripId);
+                if (existingTrip && existingTrip.createdAt) {
+                    originalCreatedAt = existingTrip.createdAt;
+                }
+            } catch(e) { console.error("Error parsing saved trips for created date", e); }
+        }
+    }
+
     const tripDataToSave: SavedTrip = {
-      id: editingTripId || crypto.randomUUID(), // Use existing ID if editing, else new
+      id: editingTripId || crypto.randomUUID(), 
       name: tripName,
       details: currentTripDetails,
       transactions: transactions,
       exchangeRates: exchangeRates,
-      createdAt: editingTripId ? (localStorage.getItem(ALL_SAVED_TRIPS_KEY) ? (JSON.parse(localStorage.getItem(ALL_SAVED_TRIPS_KEY)!) as SavedTrip[]).find(t => t.id === editingTripId)?.createdAt || new Date().toISOString() : new Date().toISOString()) : new Date().toISOString(), // Preserve original creation date if editing
-      ...(editingTripId && { updatedAt: new Date().toISOString() }) // Add updatedAt if editing
+      createdAt: editingTripId ? originalCreatedAt : new Date().toISOString(),
+      ...(editingTripId && { updatedAt: new Date().toISOString() }) 
     };
 
 
@@ -246,14 +276,12 @@ export default function ManageTripPage() {
       let existingTrips: SavedTrip[] = existingTripsJson ? JSON.parse(existingTripsJson) : [];
 
       if (editingTripId) {
-        // Update existing trip
         existingTrips = existingTrips.map(trip => trip.id === editingTripId ? tripDataToSave : trip);
         toast({
           title: "تم تحديث الرحلة بنجاح!",
           description: `تم تحديث رحلة "${tripName}".`,
         });
       } else {
-        // Add new trip
         existingTrips.push(tripDataToSave);
         toast({
           title: "تم حفظ الرحلة بنجاح!",
@@ -263,7 +291,6 @@ export default function ManageTripPage() {
       
       localStorage.setItem(ALL_SAVED_TRIPS_KEY, JSON.stringify(existingTrips));
 
-      // Clear active trip data from localStorage and state, reset for new trip
       localStorage.removeItem("transactions");
       localStorage.removeItem(ACTIVE_TRIP_DETAILS_KEY);
       saveExchangeRates({...DEFAULT_EXCHANGE_RATES_TO_USD});
@@ -272,7 +299,7 @@ export default function ManageTripPage() {
       setTransactions([]);
       setCurrentTripDetails(null); 
       setExchangeRates(loadExchangeRates()); 
-      setEditingTripId(null); // Clear editing mode
+      setEditingTripId(null); 
       
       router.push('/saved-trips');
 
