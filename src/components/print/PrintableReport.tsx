@@ -209,9 +209,30 @@ export default function PrintableReport({ transactions, exchangeRates, tripDetai
         <div className="text-center mb-2 text-sm text-gray-700">
             <p><strong>السائق:</strong> {tripDetails.driverName}</p>
             <p><strong>الوجهة:</strong> {tripDetails.destinationType === "INTERNAL" ? tripDetails.cityName : tripDetails.countryName}</p>
-            <p>
-                <strong>الفترة:</strong> من {format(new Date(tripDetails.tripStartDate), "PP", { locale: arSA })} إلى {format(new Date(tripDetails.tripEndDate), "PP", { locale: arSA })}
-            </p>
+            {(() => {
+                // Ensure tripDetails and its date properties exist
+                if (tripDetails.tripStartDate && tripDetails.tripEndDate) {
+                    // Attempt to create Date objects.
+                    // tripDetails.tripStartDate should ideally already be a Date object if coming from the form/state.
+                    const startDate = tripDetails.tripStartDate instanceof Date 
+                                      ? tripDetails.tripStartDate 
+                                      : new Date(tripDetails.tripStartDate);
+                    const endDate = tripDetails.tripEndDate instanceof Date
+                                    ? tripDetails.tripEndDate
+                                    : new Date(tripDetails.tripEndDate);
+
+                    // Check if the created Date objects are valid
+                    if (!isNaN(startDate.getTime()) && !isNaN(endDate.getTime())) {
+                        return (
+                            <p>
+                                <strong>الفترة:</strong> من {format(startDate, "PP", { locale: arSA })} إلى {format(endDate, "PP", { locale: arSA })}
+                            </p>
+                        );
+                    }
+                }
+                // Fallback if dates are missing or invalid
+                return <p><strong>الفترة:</strong> (التواريخ غير محددة أو غير صالحة)</p>;
+            })()}
         </div>
       )}
       {reportGeneratedDate && (
