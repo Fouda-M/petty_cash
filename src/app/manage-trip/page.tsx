@@ -49,11 +49,11 @@ export default function ManageTripPage() {
 
   React.useEffect(() => {
     setIsLoading(true);
+    let tripSuccessfullyLoadedForEdit = false;
     try {
       const tripIdToEdit = localStorage.getItem(EDITING_TRIP_ID_KEY);
 
       if (tripIdToEdit) {
-        localStorage.removeItem(EDITING_TRIP_ID_KEY); // Clear it after reading
         const allSavedTripsJson = localStorage.getItem(ALL_SAVED_TRIPS_KEY);
         if (allSavedTripsJson) {
           const allSavedTrips = JSON.parse(allSavedTripsJson) as SavedTrip[];
@@ -65,15 +65,12 @@ export default function ManageTripPage() {
               tripEndDate: new Date(tripToLoad.details.tripEndDate),
             });
             
-            // Apply type correction logic when loading transactions for an edited trip
-            const parsedTransactions = tripToLoad.transactions.map((t: any) => {
+            const parsedTransactions = (tripToLoad.transactions || []).map((t: any) => {
               let type = t.type;
-              // Correction for old 'CUSTODY_HANDOVER' type
               if (type === 'CUSTODY_HANDOVER') {
                 console.warn(`Old transaction type "CUSTODY_HANDOVER" found for transaction ID "${t.id}" in saved trip. Correcting to CUSTODY_HANDOVER_OWNER.`);
                 type = TransactionType.CUSTODY_HANDOVER_OWNER;
               } 
-              // Correction for any other invalid types
               else if (!Object.values(TransactionType).includes(type as TransactionType)) {
                 console.warn(`Invalid transaction type "${t.type}" found for transaction ID "${t.id}" in saved trip. Defaulting to EXPENSE.`);
                 type = TransactionType.EXPENSE;
@@ -82,33 +79,40 @@ export default function ManageTripPage() {
                 ...t,
                 id: t.id || crypto.randomUUID(),
                 date: new Date(t.date),
-                type: type as TransactionType, // Use the corrected type
+                type: type as TransactionType, 
                 amount: Number(t.amount) || 0,
               };
             }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
             
             setTransactions(parsedTransactions);
             setExchangeRates(tripToLoad.exchangeRates);
-            setEditingTripId(tripIdToEdit); // Set that we are editing this trip
+            setEditingTripId(tripIdToEdit); 
             toast({ title: "تم تحميل الرحلة للتعديل", description: `يتم الآن تعديل رحلة: ${tripToLoad.name}` });
+            tripSuccessfullyLoadedForEdit = true;
           } else {
             toast({ variant: "destructive", title: "خطأ", description: "لم يتم العثور على الرحلة المطلوبة للتعديل." });
-            loadActiveOrDefaultTripData();
           }
         } else {
           toast({ variant: "destructive", title: "خطأ", description: "لا يوجد سجل للرحلات المحفوظة للعثور على الرحلة المطلوبة." });
-          loadActiveOrDefaultTripData();
         }
-      } else {
+        localStorage.removeItem(EDITING_TRIP_ID_KEY); // Clear it after attempting to load or if not found
+      }
+      
+      if (!tripSuccessfullyLoadedForEdit) {
         loadActiveOrDefaultTripData();
       }
+
     } catch (error) {
       console.error("Failed to initialize trip data:", error);
       toast({ variant: "destructive", title: "خطأ في تهيئة بيانات الرحلة" });
       loadActiveOrDefaultTripData(); 
+      if (localStorage.getItem(EDITING_TRIP_ID_KEY)) { // Ensure it's cleared even on error
+        localStorage.removeItem(EDITING_TRIP_ID_KEY);
+      }
     }
     setIsLoading(false);
-  }, [toast]); 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Changed dependency array to [] to run once on mount
 
   const loadActiveOrDefaultTripData = () => {
     const activeDetailsJson = localStorage.getItem(ACTIVE_TRIP_DETAILS_KEY);
@@ -123,9 +127,9 @@ export default function ManageTripPage() {
        setCurrentTripDetails(null);
     }
     
-    const savedTransactions = localStorage.getItem("transactions");
-    if (savedTransactions) {
-      const parsedTransactions = JSON.parse(savedTransactions, (key, value) => {
+    const savedTransactionsJson = localStorage.getItem("transactions"); // This is for active, unsaved trip
+    if (savedTransactionsJson) {
+      const parsedTransactions = JSON.parse(savedTransactionsJson, (key, value) => {
         if (key === 'date') return new Date(value);
         return value;
       }).map((t: any) => {
