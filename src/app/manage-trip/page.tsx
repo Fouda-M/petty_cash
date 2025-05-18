@@ -30,6 +30,7 @@ import {
 const ALL_SAVED_TRIPS_KEY = "allSavedTrips_v1";
 const ACTIVE_TRIP_DETAILS_KEY = "activeTripDetails_v1";
 const EDITING_TRIP_ID_KEY = "editingTripId_v1"; 
+const ACTIVE_TRANSACTIONS_KEY = "transactions"; // Key for active, non-saved trip transactions
 
 export default function ManageTripPage() {
   const router = useRouter();
@@ -50,38 +51,44 @@ export default function ManageTripPage() {
 
   React.useEffect(() => {
     setIsLoading(true);
-    let tripSuccessfullyLoadedForEdit = false;
+    let attemptedEditLoad = false; // Flag to know if we tried to load a trip for editing
+
     try {
       const tripIdToEdit = localStorage.getItem(EDITING_TRIP_ID_KEY);
 
       if (tripIdToEdit) {
+        attemptedEditLoad = true;
+        localStorage.removeItem(EDITING_TRIP_ID_KEY); // Remove key once read, before async ops
+
         const allSavedTripsJson = localStorage.getItem(ALL_SAVED_TRIPS_KEY);
         if (allSavedTripsJson) {
           const allSavedTrips = JSON.parse(allSavedTripsJson) as SavedTrip[];
           const tripToLoad = allSavedTrips.find(trip => trip.id === tripIdToEdit);
+
           if (tripToLoad) {
+            // Successfully found the trip to load
             setCurrentTripDetails({
               ...tripToLoad.details,
               tripStartDate: new Date(tripToLoad.details.tripStartDate),
               tripEndDate: new Date(tripToLoad.details.tripEndDate),
             });
             
-            const parsedTransactions = (tripToLoad.transactions || []).map((t: any) => {
+            const loadedTransactions = Array.isArray(tripToLoad.transactions) ? tripToLoad.transactions : [];
+            const parsedTransactions = loadedTransactions.map((t: any) => {
               let type = t.type;
               if (type === 'CUSTODY_HANDOVER') {
                 console.warn(`Old transaction type "CUSTODY_HANDOVER" found for transaction ID "${t.id}" in saved trip. Correcting to CUSTODY_HANDOVER_OWNER.`);
                 type = TransactionType.CUSTODY_HANDOVER_OWNER;
-              } 
-              else if (!Object.values(TransactionType).includes(type as TransactionType)) {
+              } else if (!Object.values(TransactionType).includes(type as TransactionType)) {
                 console.warn(`Invalid transaction type "${t.type}" found for transaction ID "${t.id}" in saved trip. Defaulting to EXPENSE.`);
                 type = TransactionType.EXPENSE;
               }
               return {
                 ...t,
                 id: t.id || crypto.randomUUID(),
-                date: new Date(t.date),
+                date: new Date(t.date), // Ensure date is Date object
                 type: type as TransactionType, 
-                amount: Number(t.amount) || 0,
+                amount: Number(t.amount) || 0, // Ensure amount is a number
               };
             }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
             
@@ -89,82 +96,103 @@ export default function ManageTripPage() {
             setExchangeRates(tripToLoad.exchangeRates);
             setEditingTripId(tripIdToEdit); 
             toast({ title: "تم تحميل الرحلة للتعديل", description: `يتم الآن تعديل رحلة: ${tripToLoad.name}` });
-            tripSuccessfullyLoadedForEdit = true;
+            // Do not call loadActiveOrDefaultTripData here as edit load was successful
           } else {
-            toast({ variant: "destructive", title: "خطأ", description: "لم يتم العثور على الرحلة المطلوبة للتعديل." });
+            // tripIdToEdit was present, but tripToLoad was not found in allSavedTrips
+            toast({ variant: "destructive", title: "خطأ", description: "لم يتم العثور على الرحلة المطلوبة للتعديل في السجل." });
+            loadActiveOrDefaultTripData(); // Fallback to default/active
           }
         } else {
-          toast({ variant: "destructive", title: "خطأ", description: "لا يوجد سجل للرحلات المحفوظة للعثور على الرحلة المطلوبة." });
+          // tripIdToEdit was present, but no ALL_SAVED_TRIPS_KEY found
+          toast({ variant: "destructive", title: "خطأ", description: "لا يوجد سجل للرحلات المحفوظة." });
+          loadActiveOrDefaultTripData(); // Fallback to default/active
         }
-        localStorage.removeItem(EDITING_TRIP_ID_KEY); 
-      }
-      
-      if (!tripSuccessfullyLoadedForEdit) {
+      } else {
+        // No tripIdToEdit, so load active or default (this is the normal path for a new trip)
         loadActiveOrDefaultTripData();
       }
 
     } catch (error) {
       console.error("Failed to initialize trip data:", error);
-      toast({ variant: "destructive", title: "خطأ في تهيئة بيانات الرحلة" });
-      loadActiveOrDefaultTripData(); 
-      if (localStorage.getItem(EDITING_TRIP_ID_KEY)) { 
-        localStorage.removeItem(EDITING_TRIP_ID_KEY);
+      toast({ variant: "destructive", title: "خطأ في تهيئة بيانات الرحلة", description: String(error) });
+      loadActiveOrDefaultTripData(); // Fallback to default/active on any error
+      // Ensure key is removed if an error occurred during an edit load attempt
+      if (attemptedEditLoad && localStorage.getItem(EDITING_TRIP_ID_KEY)) { 
+        localStorage.removeItem(EDITING_TRIP_ID_KEY); // Should have been removed already, but as a safeguard
       }
+    } finally {
+        setIsLoading(false);
     }
-    setIsLoading(false);
-  }, []); 
+  }, []); // Empty dependency array ensures this runs once on mount
 
   const loadActiveOrDefaultTripData = () => {
     const activeDetailsJson = localStorage.getItem(ACTIVE_TRIP_DETAILS_KEY);
     if (activeDetailsJson) {
-      const parsedDetails = JSON.parse(activeDetailsJson);
-      setCurrentTripDetails({
-        ...parsedDetails,
-        tripStartDate: parsedDetails.tripStartDate ? new Date(parsedDetails.tripStartDate) : new Date(),
-        tripEndDate: parsedDetails.tripEndDate ? new Date(parsedDetails.tripEndDate) : new Date(),
-      });
+      try {
+        const parsedDetails = JSON.parse(activeDetailsJson);
+        setCurrentTripDetails({
+          ...parsedDetails,
+          tripStartDate: parsedDetails.tripStartDate ? new Date(parsedDetails.tripStartDate) : new Date(),
+          tripEndDate: parsedDetails.tripEndDate ? new Date(parsedDetails.tripEndDate) : new Date(),
+        });
+      } catch (e) {
+        console.error("Error parsing active trip details:", e);
+        setCurrentTripDetails(null);
+      }
     } else {
-       setCurrentTripDetails(null);
+       setCurrentTripDetails(null); // Reset if no active details
     }
     
-    const savedTransactionsJson = localStorage.getItem("transactions"); 
+    const savedTransactionsJson = localStorage.getItem(ACTIVE_TRANSACTIONS_KEY); 
     if (savedTransactionsJson) {
-      const parsedTransactions = JSON.parse(savedTransactionsJson, (key, value) => {
-        if (key === 'date') return new Date(value);
-        return value;
-      }).map((t: any) => {
-        let type = t.type;
-        if (type === 'CUSTODY_HANDOVER') {
-            console.warn(`Old transaction type "CUSTODY_HANDOVER" found for transaction ID "${t.id}" in active data. Correcting to CUSTODY_HANDOVER_OWNER.`);
-            type = TransactionType.CUSTODY_HANDOVER_OWNER;
-        }
-        else if (!Object.values(TransactionType).includes(type as TransactionType)) {
-            console.warn(`Invalid transaction type "${t.type}" found for transaction ID "${t.id}" in active data. Defaulting to EXPENSE.`);
-            type = TransactionType.EXPENSE;
-        }
-        return { ...t, id: t.id || crypto.randomUUID(), date: new Date(t.date), type: type as TransactionType, amount: Number(t.amount) || 0 };
-      });
-      setTransactions(parsedTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+      try {
+        const parsedActiveTransactions = JSON.parse(savedTransactionsJson).map((t: any) => {
+          let type = t.type;
+          if (type === 'CUSTODY_HANDOVER') {
+              console.warn(`Old transaction type "CUSTODY_HANDOVER" found for transaction ID "${t.id}" in active data. Correcting to CUSTODY_HANDOVER_OWNER.`);
+              type = TransactionType.CUSTODY_HANDOVER_OWNER;
+          }
+          else if (!Object.values(TransactionType).includes(type as TransactionType)) {
+              console.warn(`Invalid transaction type "${t.type}" found for transaction ID "${t.id}" in active data. Defaulting to EXPENSE.`);
+              type = TransactionType.EXPENSE;
+          }
+          return { 
+            ...t, 
+            id: t.id || crypto.randomUUID(), 
+            date: new Date(t.date), 
+            type: type as TransactionType, 
+            amount: Number(t.amount) || 0
+          };
+        });
+        setTransactions(parsedActiveTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+      } catch (e) {
+        console.error("Error parsing active transactions from localStorage:", e);
+        setTransactions([]);
+      }
     } else {
       setTransactions([]);
     }
     
-    setExchangeRates(loadExchangeRates());
+    setExchangeRates(loadExchangeRates()); 
     setEditingTripId(null); 
   };
 
 
   React.useEffect(() => {
+    // Persist active (non-editing) trip data to localStorage
     if (!isLoading && !editingTripId) { 
-      localStorage.setItem("transactions", JSON.stringify(transactions));
-      saveExchangeRates(exchangeRates); 
+      localStorage.setItem(ACTIVE_TRANSACTIONS_KEY, JSON.stringify(transactions));
+      // Exchange rates are saved globally by ExchangeRateManager or handleSaveFullTrip's reset
+      // saveExchangeRates(exchangeRates); // This might be redundant if rates are global
     }
-  }, [transactions, exchangeRates, isLoading, editingTripId]);
+  }, [transactions, isLoading, editingTripId]); // Removed exchangeRates from deps, managed elsewhere
 
   React.useEffect(() => {
+    // Persist active (non-editing) trip details
     if (!isLoading && !editingTripId && currentTripDetails) {
       localStorage.setItem(ACTIVE_TRIP_DETAILS_KEY, JSON.stringify(currentTripDetails));
     } else if (!isLoading && !editingTripId && !currentTripDetails) {
+      // Clear active trip details if not editing and no details are present
       localStorage.removeItem(ACTIVE_TRIP_DETAILS_KEY);
     }
   }, [currentTripDetails, isLoading, editingTripId]);
@@ -209,15 +237,43 @@ export default function ManageTripPage() {
       try {
         const html2pdfModule = await import('html2pdf.js');
         const html2pdf = html2pdfModule.default;
-        const detailsToPrint = await tripDetailsFormRef.current?.validateAndGetData();
-        if (!detailsToPrint && !currentTripDetails) {
+        
+        let detailsForPrint: TripDetailsFormData | null = currentTripDetails; // Start with current state
+        if (tripDetailsFormRef.current) { // Prefer validated data from form if available
+            const validatedData = await tripDetailsFormRef.current.validateAndGetData();
+            if (validatedData) {
+                detailsForPrint = validatedData;
+            }
+        }
+
+        if (!detailsForPrint) {
             toast({ variant: "destructive", title: "بيانات الرحلة غير كاملة للطباعة" });
             return;
         }
+        
+        // Temporarily update currentTripDetails for PrintableReport if form data is fresher
+        // This ensures the print sees the latest validated data
+        const originalDetails = currentTripDetails;
+        if (detailsForPrint !== currentTripDetails) {
+            setCurrentTripDetails(detailsForPrint);
+            // Give React a tick to re-render PrintableReport with new currentTripDetails
+            await new Promise(resolve => setTimeout(resolve, 0));
+        }
+
         html2pdf()
           .set({ margin: 0.5, filename: "transactions-report.pdf", image: { type: "jpeg", quality: 0.98 }, html2canvas: { scale: 2, useCORS: true, logging: false }, jsPDF: { unit: "in", format: "a4", orientation: "portrait" }})
           .from(element)
-          .save();
+          .save()
+          .then(() => {
+             if (detailsForPrint !== originalDetails) { // Restore if changed
+                setCurrentTripDetails(originalDetails);
+            }
+          }).catch((pdfError) => {
+            console.error("Error during PDF generation process:", pdfError);
+            if (detailsForPrint !== originalDetails) { // Restore if changed
+                setCurrentTripDetails(originalDetails);
+            }
+          });
       } catch (error) {
         console.error("Error generating PDF:", error);
         toast({ variant: "destructive", title: "خطأ في إنشاء PDF" });
@@ -226,8 +282,8 @@ export default function ManageTripPage() {
   };
 
   const handleRatesUpdate = (newRates: ExchangeRates) => {
-    saveExchangeRates(newRates); 
-    setExchangeRates(newRates);
+    saveExchangeRates(newRates); // Saves globally
+    setExchangeRates(newRates); // Updates local state for current trip context
     toast({ title: "تم تحديث أسعار الصرف" });
   };
 
@@ -246,7 +302,6 @@ export default function ManageTripPage() {
       return;
     }
     
-    // For new trips, ensure there's at least one transaction
     if (transactions.length === 0 && !editingTripId) { 
         toast({
             variant: "destructive",
@@ -257,7 +312,7 @@ export default function ManageTripPage() {
         return;
     }
 
-    const tripName = `${validatedTripDetails.driverName} - ${validatedTripDetails.cityName || validatedTripDetails.countryName} - ${format(validatedTripDetails.tripStartDate, 'dd/MM/yyyy')}`;
+    const tripName = `${validatedTripDetails.driverName} - ${validatedTripDetails.cityName || validatedTripDetails.countryName} - ${format(new Date(validatedTripDetails.tripStartDate), 'dd/MM/yyyy')}`;
     
     let originalCreatedAt = new Date().toISOString();
     if (editingTripId) {
@@ -276,9 +331,9 @@ export default function ManageTripPage() {
     const tripDataToSave: SavedTrip = {
       id: editingTripId || crypto.randomUUID(), 
       name: tripName,
-      details: validatedTripDetails, // Use validated details
-      transactions: transactions,
-      exchangeRates: exchangeRates,
+      details: validatedTripDetails, 
+      transactions: transactions, // Current transactions state
+      exchangeRates: exchangeRates, // Current exchange rates state
       createdAt: editingTripId ? originalCreatedAt : new Date().toISOString(),
       ...(editingTripId && { updatedAt: new Date().toISOString() }) 
     };
@@ -304,23 +359,19 @@ export default function ManageTripPage() {
       
       localStorage.setItem(ALL_SAVED_TRIPS_KEY, JSON.stringify(existingTrips));
 
-      localStorage.removeItem("transactions");
+      // Clear active session data
+      localStorage.removeItem(ACTIVE_TRANSACTIONS_KEY);
       localStorage.removeItem(ACTIVE_TRIP_DETAILS_KEY);
+      // Reset global exchange rates to default for a new trip form
       saveExchangeRates({...DEFAULT_EXCHANGE_RATES_TO_USD});
 
 
+      // Reset component state for a new trip
       setTransactions([]);
       setCurrentTripDetails(null); 
-      setExchangeRates(loadExchangeRates()); 
+      setExchangeRates(loadExchangeRates()); // This will load defaults now
       setEditingTripId(null); 
       
-      // Reset TripDetailsForm to its base state
-      if (tripDetailsFormRef.current) {
-        // This assumes TripDetailsForm's useEffect will pick up the null initialData
-        // and reset itself. Or we can expose a reset method.
-        // For now, setting currentTripDetails to null will make initialData null.
-      }
-
       router.push('/saved-trips');
 
     } catch (error) {
@@ -423,7 +474,11 @@ export default function ManageTripPage() {
       />
 
       <div className="print-only hidden">
-        <PrintableReport transactions={transactions} exchangeRates={exchangeRates} tripDetails={currentTripDetails || (tripDetailsFormRef.current && tripDetailsFormRef.current.validateAndGetData() ? (tripDetailsFormRef.current.validateAndGetData() as unknown as TripDetailsFormData) : null) } />
+         <PrintableReport 
+            transactions={transactions} 
+            exchangeRates={exchangeRates} 
+            tripDetails={currentTripDetails} // Pass currentTripDetails, which should be updated by validateAndGetData for print
+        />
       </div>
     </div>
   );
