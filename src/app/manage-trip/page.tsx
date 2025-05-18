@@ -30,7 +30,7 @@ import {
 const ALL_SAVED_TRIPS_KEY = "allSavedTrips_v1";
 const ACTIVE_TRIP_DETAILS_KEY = "activeTripDetails_v1";
 const EDITING_TRIP_ID_KEY = "editingTripId_v1"; 
-const ACTIVE_TRANSACTIONS_KEY = "transactions"; // Key for active, non-saved trip transactions
+const ACTIVE_TRANSACTIONS_KEY = "transactions_v1"; // Changed key to avoid conflict if old data exists
 
 export default function ManageTripPage() {
   const router = useRouter();
@@ -48,84 +48,8 @@ export default function ManageTripPage() {
   const [isExchangeRateManagerOpen, setIsExchangeRateManagerOpen] = React.useState(false);
   const [isSavingFullTrip, setIsSavingFullTrip] = React.useState(false);
 
-
-  React.useEffect(() => {
-    setIsLoading(true);
-    let attemptedEditLoad = false; // Flag to know if we tried to load a trip for editing
-
-    try {
-      const tripIdToEdit = localStorage.getItem(EDITING_TRIP_ID_KEY);
-
-      if (tripIdToEdit) {
-        attemptedEditLoad = true;
-        localStorage.removeItem(EDITING_TRIP_ID_KEY); // Remove key once read, before async ops
-
-        const allSavedTripsJson = localStorage.getItem(ALL_SAVED_TRIPS_KEY);
-        if (allSavedTripsJson) {
-          const allSavedTrips = JSON.parse(allSavedTripsJson) as SavedTrip[];
-          const tripToLoad = allSavedTrips.find(trip => trip.id === tripIdToEdit);
-
-          if (tripToLoad) {
-            // Successfully found the trip to load
-            setCurrentTripDetails({
-              ...tripToLoad.details,
-              tripStartDate: new Date(tripToLoad.details.tripStartDate),
-              tripEndDate: new Date(tripToLoad.details.tripEndDate),
-            });
-            
-            const loadedTransactions = Array.isArray(tripToLoad.transactions) ? tripToLoad.transactions : [];
-            const parsedTransactions = loadedTransactions.map((t: any) => {
-              let type = t.type;
-              if (type === 'CUSTODY_HANDOVER') {
-                console.warn(`Old transaction type "CUSTODY_HANDOVER" found for transaction ID "${t.id}" in saved trip. Correcting to CUSTODY_HANDOVER_OWNER.`);
-                type = TransactionType.CUSTODY_HANDOVER_OWNER;
-              } else if (!Object.values(TransactionType).includes(type as TransactionType)) {
-                console.warn(`Invalid transaction type "${t.type}" found for transaction ID "${t.id}" in saved trip. Defaulting to EXPENSE.`);
-                type = TransactionType.EXPENSE;
-              }
-              return {
-                ...t,
-                id: t.id || crypto.randomUUID(),
-                date: new Date(t.date), // Ensure date is Date object
-                type: type as TransactionType, 
-                amount: Number(t.amount) || 0, // Ensure amount is a number
-              };
-            }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-            
-            setTransactions(parsedTransactions);
-            setExchangeRates(tripToLoad.exchangeRates);
-            setEditingTripId(tripIdToEdit); 
-            toast({ title: "تم تحميل الرحلة للتعديل", description: `يتم الآن تعديل رحلة: ${tripToLoad.name}` });
-            // Do not call loadActiveOrDefaultTripData here as edit load was successful
-          } else {
-            // tripIdToEdit was present, but tripToLoad was not found in allSavedTrips
-            toast({ variant: "destructive", title: "خطأ", description: "لم يتم العثور على الرحلة المطلوبة للتعديل في السجل." });
-            loadActiveOrDefaultTripData(); // Fallback to default/active
-          }
-        } else {
-          // tripIdToEdit was present, but no ALL_SAVED_TRIPS_KEY found
-          toast({ variant: "destructive", title: "خطأ", description: "لا يوجد سجل للرحلات المحفوظة." });
-          loadActiveOrDefaultTripData(); // Fallback to default/active
-        }
-      } else {
-        // No tripIdToEdit, so load active or default (this is the normal path for a new trip)
-        loadActiveOrDefaultTripData();
-      }
-
-    } catch (error) {
-      console.error("Failed to initialize trip data:", error);
-      toast({ variant: "destructive", title: "خطأ في تهيئة بيانات الرحلة", description: String(error) });
-      loadActiveOrDefaultTripData(); // Fallback to default/active on any error
-      // Ensure key is removed if an error occurred during an edit load attempt
-      if (attemptedEditLoad && localStorage.getItem(EDITING_TRIP_ID_KEY)) { 
-        localStorage.removeItem(EDITING_TRIP_ID_KEY); // Should have been removed already, but as a safeguard
-      }
-    } finally {
-        setIsLoading(false);
-    }
-  }, []); // Empty dependency array ensures this runs once on mount
-
-  const loadActiveOrDefaultTripData = () => {
+  const loadActiveOrDefaultTripData = React.useCallback(() => {
+    console.log("[ManageTripPage Debug] Called loadActiveOrDefaultTripData");
     const activeDetailsJson = localStorage.getItem(ACTIVE_TRIP_DETAILS_KEY);
     if (activeDetailsJson) {
       try {
@@ -136,24 +60,26 @@ export default function ManageTripPage() {
           tripEndDate: parsedDetails.tripEndDate ? new Date(parsedDetails.tripEndDate) : new Date(),
         });
       } catch (e) {
-        console.error("Error parsing active trip details:", e);
-        setCurrentTripDetails(null);
+        console.error("[ManageTripPage Debug] Error parsing active trip details from localStorage:", e);
+        setCurrentTripDetails(null); // Reset if parsing fails
+        localStorage.removeItem(ACTIVE_TRIP_DETAILS_KEY); // Remove corrupted data
       }
     } else {
-       setCurrentTripDetails(null); // Reset if no active details
+       setCurrentTripDetails(null); 
     }
     
     const savedTransactionsJson = localStorage.getItem(ACTIVE_TRANSACTIONS_KEY); 
+    console.log(`[ManageTripPage Debug] loadActiveOrDefaultTripData - savedTransactionsJson: ${savedTransactionsJson ? savedTransactionsJson.substring(0,100)+'...' : 'null'}`);
     if (savedTransactionsJson) {
       try {
         const parsedActiveTransactions = JSON.parse(savedTransactionsJson).map((t: any) => {
           let type = t.type;
           if (type === 'CUSTODY_HANDOVER') {
-              console.warn(`Old transaction type "CUSTODY_HANDOVER" found for transaction ID "${t.id}" in active data. Correcting to CUSTODY_HANDOVER_OWNER.`);
+              console.warn(`[ManageTripPage Debug] Old transaction type "CUSTODY_HANDOVER" found for transaction ID "${t.id}" in active data. Correcting to CUSTODY_HANDOVER_OWNER.`);
               type = TransactionType.CUSTODY_HANDOVER_OWNER;
           }
           else if (!Object.values(TransactionType).includes(type as TransactionType)) {
-              console.warn(`Invalid transaction type "${t.type}" found for transaction ID "${t.id}" in active data. Defaulting to EXPENSE.`);
+              console.warn(`[ManageTripPage Debug] Invalid transaction type "${t.type}" found for transaction ID "${t.id}" in active data. Defaulting to EXPENSE.`);
               type = TransactionType.EXPENSE;
           }
           return { 
@@ -164,66 +90,167 @@ export default function ManageTripPage() {
             amount: Number(t.amount) || 0
           };
         });
+        console.log("[ManageTripPage Debug] loadActiveOrDefaultTripData - Parsed active transactions:", parsedActiveTransactions);
         setTransactions(parsedActiveTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
       } catch (e) {
-        console.error("Error parsing active transactions from localStorage:", e);
+        console.error("[ManageTripPage Debug] Error parsing active transactions from localStorage:", e);
         setTransactions([]);
+        localStorage.removeItem(ACTIVE_TRANSACTIONS_KEY); // Remove corrupted data
       }
     } else {
+      console.log("[ManageTripPage Debug] loadActiveOrDefaultTripData - No active transactions found, setting to [].");
       setTransactions([]);
     }
     
     setExchangeRates(loadExchangeRates()); 
     setEditingTripId(null); 
-  };
-
+    console.log("[ManageTripPage Debug] Finished loadActiveOrDefaultTripData");
+  }, [toast]); // Added toast to dependencies as it's used, though unlikely to change
 
   React.useEffect(() => {
-    // Persist active (non-editing) trip data to localStorage
-    if (!isLoading && !editingTripId) { 
-      localStorage.setItem(ACTIVE_TRANSACTIONS_KEY, JSON.stringify(transactions));
-      // Exchange rates are saved globally by ExchangeRateManager or handleSaveFullTrip's reset
-      // saveExchangeRates(exchangeRates); // This might be redundant if rates are global
+    setIsLoading(true);
+    console.log("[ManageTripPage Debug] Initial useEffect for data loading triggered.");
+    let attemptedEditLoad = false;
+
+    try {
+      const tripIdToEdit = localStorage.getItem(EDITING_TRIP_ID_KEY);
+      console.log(`[ManageTripPage Debug] tripIdToEdit from localStorage: ${tripIdToEdit}`);
+
+      if (tripIdToEdit) {
+        attemptedEditLoad = true;
+        console.log(`[ManageTripPage Debug] Attempting to load trip for editing. ID: ${tripIdToEdit}`);
+        // It's crucial to remove the key immediately after reading it to prevent re-processing on refresh or error.
+        localStorage.removeItem(EDITING_TRIP_ID_KEY);
+        console.log(`[ManageTripPage Debug] Removed ${EDITING_TRIP_ID_KEY} from localStorage.`);
+
+        const allSavedTripsJson = localStorage.getItem(ALL_SAVED_TRIPS_KEY);
+        if (allSavedTripsJson) {
+          const allSavedTrips = JSON.parse(allSavedTripsJson) as SavedTrip[];
+          const tripToLoad = allSavedTrips.find(trip => trip.id === tripIdToEdit);
+          
+          console.log(`[ManageTripPage Debug] tripToLoad from allSavedTrips (ID: ${tripIdToEdit}):`, tripToLoad ? JSON.stringify(tripToLoad).substring(0,300)+'...' : "null");
+
+          if (tripToLoad) {
+            console.log("[ManageTripPage Debug] Found tripToLoad. Processing its data.");
+            setCurrentTripDetails({
+              ...tripToLoad.details,
+              tripStartDate: new Date(tripToLoad.details.tripStartDate),
+              tripEndDate: new Date(tripToLoad.details.tripEndDate),
+            });
+            
+            const rawTransactionsFromTripToLoad = tripToLoad.transactions;
+            console.log(`[ManageTripPage Debug] Raw transactions from tripToLoad (ID: ${tripIdToEdit}):`, JSON.stringify(rawTransactionsFromTripToLoad));
+
+            const loadedTransactions = Array.isArray(rawTransactionsFromTripToLoad) ? rawTransactionsFromTripToLoad : [];
+             console.log(`[ManageTripPage Debug] Ensured loadedTransactions is an array for trip ID ${tripIdToEdit}:`, JSON.stringify(loadedTransactions));
+
+            const parsedTransactions = loadedTransactions.map((t: any) => {
+              let type = t.type;
+              if (type === 'CUSTODY_HANDOVER') {
+                console.warn(`[ManageTripPage Debug] Old transaction type "CUSTODY_HANDOVER" found for transaction ID "${t.id}" in saved trip. Correcting to CUSTODY_HANDOVER_OWNER.`);
+                type = TransactionType.CUSTODY_HANDOVER_OWNER;
+              } else if (!Object.values(TransactionType).includes(type as TransactionType)) {
+                console.warn(`[ManageTripPage Debug] Invalid transaction type "${t.type}" found for transaction ID "${t.id}" in saved trip. Defaulting to EXPENSE.`);
+                type = TransactionType.EXPENSE;
+              }
+              return {
+                ...t,
+                id: t.id || crypto.randomUUID(),
+                date: new Date(t.date), 
+                type: type as TransactionType, 
+                amount: Number(t.amount) || 0,
+              };
+            }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+            
+            console.log(`[ManageTripPage Debug] Parsed transactions to be set for editing trip ID ${tripIdToEdit}:`, JSON.stringify(parsedTransactions));
+            setTransactions(parsedTransactions);
+            setExchangeRates(tripToLoad.exchangeRates || loadExchangeRates()); 
+            setEditingTripId(tripIdToEdit); 
+            toast({ title: "تم تحميل الرحلة للتعديل", description: `يتم الآن تعديل رحلة: ${tripToLoad.name}` });
+            console.log(`[ManageTripPage Debug] Successfully loaded trip ID ${tripIdToEdit} for editing. State updated.`);
+            
+          } else {
+            console.warn(`[ManageTripPage Debug] Trip ID ${tripIdToEdit} not found in allSavedTrips. Falling back.`);
+            toast({ variant: "destructive", title: "خطأ", description: "لم يتم العثور على الرحلة المطلوبة للتعديل في السجل." });
+            loadActiveOrDefaultTripData(); 
+          }
+        } else {
+          console.warn(`[ManageTripPage Debug] ${ALL_SAVED_TRIPS_KEY} not found in localStorage. Falling back.`);
+          toast({ variant: "destructive", title: "خطأ", description: "لا يوجد سجل للرحلات المحفوظة." });
+          loadActiveOrDefaultTripData();
+        }
+      } else {
+        console.log("[ManageTripPage Debug] No tripIdToEdit found. Calling loadActiveOrDefaultTripData.");
+        loadActiveOrDefaultTripData();
+      }
+
+    } catch (error) {
+      console.error("[ManageTripPage Debug] Error during initial data loading in useEffect:", error);
+      toast({ variant: "destructive", title: "خطأ في تهيئة بيانات الرحلة", description: String(error) });
+      loadActiveOrDefaultTripData(); 
+      // Defensive removal of editing key if error occurred during an edit attempt
+      if (attemptedEditLoad && localStorage.getItem(EDITING_TRIP_ID_KEY)) { 
+        console.warn("[ManageTripPage Debug] Removing EDITING_TRIP_ID_KEY due to error during edit load.");
+        localStorage.removeItem(EDITING_TRIP_ID_KEY); 
+      }
+    } finally {
+        setIsLoading(false);
+        console.log("[ManageTripPage Debug] Initial useEffect for data loading finished. isLoading: false.");
     }
-  }, [transactions, isLoading, editingTripId]); // Removed exchangeRates from deps, managed elsewhere
+  // loadActiveOrDefaultTripData and toast are stable from useCallback/hook, so [] is fine.
+  }, [loadActiveOrDefaultTripData, toast]); 
+
 
   React.useEffect(() => {
-    // Persist active (non-editing) trip details
+    if (!isLoading && !editingTripId) { 
+      console.log("[ManageTripPage Debug] Persisting active (non-editing) transactions to localStorage:", transactions);
+      localStorage.setItem(ACTIVE_TRANSACTIONS_KEY, JSON.stringify(transactions));
+    }
+  }, [transactions, isLoading, editingTripId]);
+
+  React.useEffect(() => {
     if (!isLoading && !editingTripId && currentTripDetails) {
+      console.log("[ManageTripPage Debug] Persisting active (non-editing) trip details to localStorage:", currentTripDetails);
       localStorage.setItem(ACTIVE_TRIP_DETAILS_KEY, JSON.stringify(currentTripDetails));
     } else if (!isLoading && !editingTripId && !currentTripDetails) {
-      // Clear active trip details if not editing and no details are present
+      console.log("[ManageTripPage Debug] Removing active (non-editing) trip details from localStorage.");
       localStorage.removeItem(ACTIVE_TRIP_DETAILS_KEY);
     }
   }, [currentTripDetails, isLoading, editingTripId]);
 
 
   const handleTripDetailsUpdate = (details: TripDetailsFormData) => {
+    console.log("[ManageTripPage Debug] handleTripDetailsUpdate called with:", details);
     setCurrentTripDetails(details);
   };
 
   const handleAddTransaction = (newTransaction: Transaction) => {
+     console.log("[ManageTripPage Debug] handleAddTransaction called with:", newTransaction);
     setTransactions((prevTransactions) =>
       [...prevTransactions, newTransaction].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
     );
   };
 
   const handleDeleteTransaction = (id: string) => {
+    console.log(`[ManageTripPage Debug] handleDeleteTransaction called for ID: ${id}`);
     setTransactions(prev => prev.filter(t => t.id !== id));
     toast({ title: "تم حذف المعاملة" });
   };
 
   const handleOpenEditModal = (transaction: Transaction) => {
+    console.log("[ManageTripPage Debug] handleOpenEditModal called for transaction:", transaction);
     setTransactionToEdit(transaction);
     setIsEditModalOpen(true);
   };
 
   const handleCloseEditModal = () => {
+    console.log("[ManageTripPage Debug] handleCloseEditModal called.");
     setTransactionToEdit(null);
     setIsEditModalOpen(false);
   };
 
   const handleTransactionUpdated = (updatedTransaction: Transaction) => {
+    console.log("[ManageTripPage Debug] handleTransactionUpdated called with:", updatedTransaction);
     setTransactions(prev =>
       prev.map(t => t.id === updatedTransaction.id ? updatedTransaction : t)
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
@@ -232,32 +259,34 @@ export default function ManageTripPage() {
   };
 
   const handlePrint = async () => {
+    console.log("[ManageTripPage Debug] handlePrint called.");
     const element = document.querySelector(".print-only");
     if (element && typeof window !== 'undefined') {
       try {
         const html2pdfModule = await import('html2pdf.js');
         const html2pdf = html2pdfModule.default;
         
-        let detailsForPrint: TripDetailsFormData | null = currentTripDetails; // Start with current state
-        if (tripDetailsFormRef.current) { // Prefer validated data from form if available
+        let detailsForPrint: TripDetailsFormData | null = currentTripDetails;
+        if (tripDetailsFormRef.current) {
             const validatedData = await tripDetailsFormRef.current.validateAndGetData();
             if (validatedData) {
                 detailsForPrint = validatedData;
+                console.log("[ManageTripPage Debug] Using validated trip details for print:", detailsForPrint);
+            } else {
+                 console.warn("[ManageTripPage Debug] Trip details form validation failed for print.");
             }
         }
 
         if (!detailsForPrint) {
             toast({ variant: "destructive", title: "بيانات الرحلة غير كاملة للطباعة" });
+            console.error("[ManageTripPage Debug] Cannot print, trip details are null or invalid.");
             return;
         }
         
-        // Temporarily update currentTripDetails for PrintableReport if form data is fresher
-        // This ensures the print sees the latest validated data
         const originalDetails = currentTripDetails;
         if (detailsForPrint !== currentTripDetails) {
             setCurrentTripDetails(detailsForPrint);
-            // Give React a tick to re-render PrintableReport with new currentTripDetails
-            await new Promise(resolve => setTimeout(resolve, 0));
+            await new Promise(resolve => setTimeout(resolve, 0)); // Allow re-render
         }
 
         html2pdf()
@@ -265,30 +294,35 @@ export default function ManageTripPage() {
           .from(element)
           .save()
           .then(() => {
-             if (detailsForPrint !== originalDetails) { // Restore if changed
+             console.log("[ManageTripPage Debug] PDF generation successful.");
+             if (detailsForPrint !== originalDetails) { 
                 setCurrentTripDetails(originalDetails);
             }
           }).catch((pdfError) => {
-            console.error("Error during PDF generation process:", pdfError);
-            if (detailsForPrint !== originalDetails) { // Restore if changed
+            console.error("[ManageTripPage Debug] Error during PDF generation process:", pdfError);
+            if (detailsForPrint !== originalDetails) { 
                 setCurrentTripDetails(originalDetails);
             }
           });
       } catch (error) {
-        console.error("Error generating PDF:", error);
+        console.error("[ManageTripPage Debug] Error in handlePrint:", error);
         toast({ variant: "destructive", title: "خطأ في إنشاء PDF" });
       }
+    } else {
+        console.warn("[ManageTripPage Debug] Printable element not found or window is undefined.");
     }
   };
 
   const handleRatesUpdate = (newRates: ExchangeRates) => {
-    saveExchangeRates(newRates); // Saves globally
-    setExchangeRates(newRates); // Updates local state for current trip context
+    console.log("[ManageTripPage Debug] handleRatesUpdate called with:", newRates);
+    saveExchangeRates(newRates); 
+    setExchangeRates(newRates); 
     toast({ title: "تم تحديث أسعار الصرف" });
   };
 
   const handleSaveFullTrip = async () => {
     setIsSavingFullTrip(true);
+    console.log("[ManageTripPage Debug] handleSaveFullTrip called. EditingTripId:", editingTripId);
 
     const validatedTripDetails = await tripDetailsFormRef.current?.validateAndGetData();
 
@@ -299,6 +333,7 @@ export default function ManageTripPage() {
         description: "يرجى إكمال وتصحيح بيانات الرحلة في النموذج أعلاه.",
       });
       setIsSavingFullTrip(false);
+      console.error("[ManageTripPage Debug] Trip details validation failed in handleSaveFullTrip.");
       return;
     }
     
@@ -309,10 +344,12 @@ export default function ManageTripPage() {
             description: "يرجى إضافة معاملة واحدة على الأقل قبل حفظ رحلة جديدة.",
         });
         setIsSavingFullTrip(false);
+        console.warn("[ManageTripPage Debug] Attempted to save new trip with no transactions.");
         return;
     }
 
     const tripName = `${validatedTripDetails.driverName} - ${validatedTripDetails.cityName || validatedTripDetails.countryName} - ${format(new Date(validatedTripDetails.tripStartDate), 'dd/MM/yyyy')}`;
+    console.log(`[ManageTripPage Debug] Generated trip name: ${tripName}`);
     
     let originalCreatedAt = new Date().toISOString();
     if (editingTripId) {
@@ -324,7 +361,7 @@ export default function ManageTripPage() {
                 if (existingTrip && existingTrip.createdAt) {
                     originalCreatedAt = existingTrip.createdAt;
                 }
-            } catch(e) { console.error("Error parsing saved trips for created date", e); }
+            } catch(e) { console.error("[ManageTripPage Debug] Error parsing saved trips for created date", e); }
         }
     }
 
@@ -332,11 +369,12 @@ export default function ManageTripPage() {
       id: editingTripId || crypto.randomUUID(), 
       name: tripName,
       details: validatedTripDetails, 
-      transactions: transactions, // Current transactions state
-      exchangeRates: exchangeRates, // Current exchange rates state
+      transactions: transactions, 
+      exchangeRates: exchangeRates, 
       createdAt: editingTripId ? originalCreatedAt : new Date().toISOString(),
       ...(editingTripId && { updatedAt: new Date().toISOString() }) 
     };
+    console.log("[ManageTripPage Debug] Trip data to save:", JSON.stringify(tripDataToSave).substring(0,300)+'...');
 
 
     try {
@@ -349,33 +387,34 @@ export default function ManageTripPage() {
           title: "تم تحديث الرحلة بنجاح!",
           description: `تم تحديث رحلة "${tripName}".`,
         });
+        console.log(`[ManageTripPage Debug] Updated trip ID: ${editingTripId}`);
       } else {
         existingTrips.push(tripDataToSave);
         toast({
           title: "تم حفظ الرحلة بنجاح!",
           description: `تم حفظ رحلة "${tripName}".`,
         });
+        console.log(`[ManageTripPage Debug] Saved new trip ID: ${tripDataToSave.id}`);
       }
       
       localStorage.setItem(ALL_SAVED_TRIPS_KEY, JSON.stringify(existingTrips));
+      console.log(`[ManageTripPage Debug] ${ALL_SAVED_TRIPS_KEY} updated in localStorage.`);
 
-      // Clear active session data
       localStorage.removeItem(ACTIVE_TRANSACTIONS_KEY);
       localStorage.removeItem(ACTIVE_TRIP_DETAILS_KEY);
-      // Reset global exchange rates to default for a new trip form
       saveExchangeRates({...DEFAULT_EXCHANGE_RATES_TO_USD});
+      console.log("[ManageTripPage Debug] Cleared active session data and reset exchange rates to default.");
 
-
-      // Reset component state for a new trip
       setTransactions([]);
       setCurrentTripDetails(null); 
-      setExchangeRates(loadExchangeRates()); // This will load defaults now
+      setExchangeRates(loadExchangeRates()); 
       setEditingTripId(null); 
+      console.log("[ManageTripPage Debug] Component state reset for new trip.");
       
       router.push('/saved-trips');
 
     } catch (error) {
-      console.error("Failed to save/update full trip:", error);
+      console.error("[ManageTripPage Debug] Failed to save/update full trip:", error);
       toast({ variant: "destructive", title: "خطأ في حفظ/تحديث الرحلة", description: "لم يتم حفظ/تحديث الرحلة بالكامل." });
     } finally {
       setIsSavingFullTrip(false);
@@ -384,7 +423,7 @@ export default function ManageTripPage() {
 
 
   if (isLoading) {
-    return <div className="flex justify-center items-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-primary" /> <p className="ms-3">جارٍ تحميل البيانات...</p></div>;
+    return <div className="flex justify-center items-center min-h-screen"><Loader2 className="ms-2 h-8 w-8 animate-spin text-primary" /> <p className="ms-3">جارٍ تحميل البيانات...</p></div>;
   }
   
   const saveButtonText = editingTripId ? "تحديث الرحلة بالكامل والانتقال إلى السجل" : "حفظ الرحلة بالكامل والانتقال إلى السجل";
@@ -477,7 +516,7 @@ export default function ManageTripPage() {
          <PrintableReport 
             transactions={transactions} 
             exchangeRates={exchangeRates} 
-            tripDetails={currentTripDetails} // Pass currentTripDetails, which should be updated by validateAndGetData for print
+            tripDetails={currentTripDetails} 
         />
       </div>
     </div>
