@@ -30,7 +30,7 @@ import {
 const ALL_SAVED_TRIPS_KEY = "allSavedTrips_v1";
 const ACTIVE_TRIP_DETAILS_KEY = "activeTripDetails_v1";
 const EDITING_TRIP_ID_KEY = "editingTripId_v1"; 
-const ACTIVE_TRANSACTIONS_KEY = "transactions_v1"; // Changed key to avoid conflict if old data exists
+const ACTIVE_TRANSACTIONS_KEY = "transactions_v1"; 
 
 export default function ManageTripPage() {
   const router = useRouter();
@@ -61,8 +61,8 @@ export default function ManageTripPage() {
         });
       } catch (e) {
         console.error("[ManageTripPage Debug] Error parsing active trip details from localStorage:", e);
-        setCurrentTripDetails(null); // Reset if parsing fails
-        localStorage.removeItem(ACTIVE_TRIP_DETAILS_KEY); // Remove corrupted data
+        setCurrentTripDetails(null); 
+        localStorage.removeItem(ACTIVE_TRIP_DETAILS_KEY); 
       }
     } else {
        setCurrentTripDetails(null); 
@@ -95,7 +95,7 @@ export default function ManageTripPage() {
       } catch (e) {
         console.error("[ManageTripPage Debug] Error parsing active transactions from localStorage:", e);
         setTransactions([]);
-        localStorage.removeItem(ACTIVE_TRANSACTIONS_KEY); // Remove corrupted data
+        localStorage.removeItem(ACTIVE_TRANSACTIONS_KEY); 
       }
     } else {
       console.log("[ManageTripPage Debug] loadActiveOrDefaultTripData - No active transactions found, setting to [].");
@@ -105,7 +105,7 @@ export default function ManageTripPage() {
     setExchangeRates(loadExchangeRates()); 
     setEditingTripId(null); 
     console.log("[ManageTripPage Debug] Finished loadActiveOrDefaultTripData");
-  }, [toast]); // Added toast to dependencies as it's used, though unlikely to change
+  }, []); // Removed toast from dependency array as it's not called inside
 
   React.useEffect(() => {
     setIsLoading(true);
@@ -119,8 +119,7 @@ export default function ManageTripPage() {
       if (tripIdToEdit) {
         attemptedEditLoad = true;
         console.log(`[ManageTripPage Debug] Attempting to load trip for editing. ID: ${tripIdToEdit}`);
-        // It's crucial to remove the key immediately after reading it to prevent re-processing on refresh or error.
-        localStorage.removeItem(EDITING_TRIP_ID_KEY);
+        localStorage.removeItem(EDITING_TRIP_ID_KEY); // Remove immediately after reading
         console.log(`[ManageTripPage Debug] Removed ${EDITING_TRIP_ID_KEY} from localStorage.`);
 
         const allSavedTripsJson = localStorage.getItem(ALL_SAVED_TRIPS_KEY);
@@ -142,7 +141,7 @@ export default function ManageTripPage() {
             console.log(`[ManageTripPage Debug] Raw transactions from tripToLoad (ID: ${tripIdToEdit}):`, JSON.stringify(rawTransactionsFromTripToLoad));
 
             const loadedTransactions = Array.isArray(rawTransactionsFromTripToLoad) ? rawTransactionsFromTripToLoad : [];
-             console.log(`[ManageTripPage Debug] Ensured loadedTransactions is an array for trip ID ${tripIdToEdit}:`, JSON.stringify(loadedTransactions));
+            console.log(`[ManageTripPage Debug] Ensured loadedTransactions is an array for trip ID ${tripIdToEdit}:`, JSON.stringify(loadedTransactions));
 
             const parsedTransactions = loadedTransactions.map((t: any) => {
               let type = t.type;
@@ -188,7 +187,6 @@ export default function ManageTripPage() {
       console.error("[ManageTripPage Debug] Error during initial data loading in useEffect:", error);
       toast({ variant: "destructive", title: "خطأ في تهيئة بيانات الرحلة", description: String(error) });
       loadActiveOrDefaultTripData(); 
-      // Defensive removal of editing key if error occurred during an edit attempt
       if (attemptedEditLoad && localStorage.getItem(EDITING_TRIP_ID_KEY)) { 
         console.warn("[ManageTripPage Debug] Removing EDITING_TRIP_ID_KEY due to error during edit load.");
         localStorage.removeItem(EDITING_TRIP_ID_KEY); 
@@ -197,7 +195,6 @@ export default function ManageTripPage() {
         setIsLoading(false);
         console.log("[ManageTripPage Debug] Initial useEffect for data loading finished. isLoading: false.");
     }
-  // loadActiveOrDefaultTripData and toast are stable from useCallback/hook, so [] is fine.
   }, [loadActiveOrDefaultTripData, toast]); 
 
 
@@ -286,7 +283,7 @@ export default function ManageTripPage() {
         const originalDetails = currentTripDetails;
         if (detailsForPrint !== currentTripDetails) {
             setCurrentTripDetails(detailsForPrint);
-            await new Promise(resolve => setTimeout(resolve, 0)); // Allow re-render
+            await new Promise(resolve => setTimeout(resolve, 0)); 
         }
 
         html2pdf()
@@ -402,12 +399,12 @@ export default function ManageTripPage() {
 
       localStorage.removeItem(ACTIVE_TRANSACTIONS_KEY);
       localStorage.removeItem(ACTIVE_TRIP_DETAILS_KEY);
-      saveExchangeRates({...DEFAULT_EXCHANGE_RATES_TO_USD});
+      saveExchangeRates({...DEFAULT_EXCHANGE_RATES_TO_USD}); // Reset global exchange rates
       console.log("[ManageTripPage Debug] Cleared active session data and reset exchange rates to default.");
 
       setTransactions([]);
       setCurrentTripDetails(null); 
-      setExchangeRates(loadExchangeRates()); 
+      setExchangeRates(loadExchangeRates()); // Load default rates into state
       setEditingTripId(null); 
       console.log("[ManageTripPage Debug] Component state reset for new trip.");
       
@@ -522,3 +519,4 @@ export default function ManageTripPage() {
     </div>
   );
 }
+
