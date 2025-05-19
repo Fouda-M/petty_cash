@@ -1,22 +1,48 @@
 
 'use server';
 
-import { createServerActionClient } from '@supabase/ssr';
+import { createServerClient, type CookieOptions } from '@supabase/ssr'; // Updated import
 import { cookies } from 'next/headers';
 import type { SavedTrip, Transaction } from '@/types'; // Assuming SavedTrip is the primary type to backup/restore
 
-async function getSupabaseServerActionClient() {
+// Helper function to get Supabase client for server actions
+function getSupabaseServerClient() {
   const cookieStore = cookies();
-  // The URL and Key are typically read from environment variables by createServerActionClient
-  return createServerActionClient({
-    cookies: () => cookieStore,
-  });
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return cookieStore.get(name)?.value;
+        },
+        set(name: string, value: string, options: CookieOptions) {
+          try {
+            cookieStore.set({ name, value, ...options });
+          } catch (error) {
+            // This usually happens when the path is not available.
+            // If you see this error, please check your Next.js Middleware configuration
+            console.warn(`[Supabase Server Client] Failed to set cookie '${name}'. Error:`, error);
+          }
+        },
+        remove(name: string, options: CookieOptions) {
+          try {
+            cookieStore.set({ name, value: '', ...options });
+          } catch (error) {
+            // This usually happens when the path is not available.
+            // If you see this error, please check your Next.js Middleware configuration
+            console.warn(`[Supabase Server Client] Failed to remove cookie '${name}'. Error:`, error);
+          }
+        },
+      },
+    }
+  );
 }
 
 
 export async function backupUserTripsAction(): Promise<{ success: boolean; data?: string; error?: string }> {
   console.log("[Backup Action] Attempting to backup user trips...");
-  const supabase = getSupabaseServerActionClient();
+  const supabase = getSupabaseServerClient();
   
   const { data: { user } , error: userError } = await supabase.auth.getUser();
 
@@ -70,7 +96,7 @@ export async function backupUserTripsAction(): Promise<{ success: boolean; data?
 
 export async function restoreUserTripsAction(fileName: string, fileContent: string): Promise<{ success: boolean; error?: string }> {
   console.log(`[Restore Action] Attempting to restore user trips from file: ${fileName}`);
-  const supabase = getSupabaseServerActionClient();
+  const supabase = getSupabaseServerClient();
 
   const { data: { user } , error: authError } = await supabase.auth.getUser();
   if (authError || !user) {
@@ -131,6 +157,7 @@ export async function restoreUserTripsAction(fileName: string, fileContent: stri
         details,
         transactions,
         user_id: user.id,
+        // created_at and updated_at will be handled by DB defaults or triggers
       };
     }).filter(trip => trip !== null); 
 
