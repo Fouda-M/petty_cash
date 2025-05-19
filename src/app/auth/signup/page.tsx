@@ -57,16 +57,11 @@ export default function SignupPage() {
         throw error;
       }
       
-      // data.user will be null if email confirmation is required and not yet done.
-      // data.session will also be null.
-      // If email confirmation is enabled in Supabase, the user object might be returned but session might be null.
-      // You might want to inform the user to check their email.
-
+      // Since email confirmation will be disabled in Supabase settings,
+      // we can directly show a generic success message and redirect.
       toast({
         title: "تم إنشاء الحساب بنجاح!",
-        description: data.user?.identities?.length === 0 // A heuristic: if no identities, likely needs confirmation
-          ? "تم إرسال رمز OTP لتفعيل حسابك. يرجى التحقق من بريدك الإلكتروني."
-          : "مرحباً بك! يتم الآن توجيهك إلى لوحة التحكم.",
+        description: "مرحباً بك! يتم الآن توجيهك إلى لوحة التحكم.",
       });
       router.push('/dashboard'); 
     } catch (error) {
