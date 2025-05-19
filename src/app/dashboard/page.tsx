@@ -4,10 +4,10 @@
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import Logo from '@/components/shared/Logo';
-import { PlusCircle, History, Download, Upload, Loader2 } from 'lucide-react';
+import { PlusCircle, History, Download, Upload, Loader2, ListOrdered, DatabaseBackup, DatabaseZap } from 'lucide-react';
 import * as React from "react";
 import { useToast } from "@/hooks/use-toast";
-import { backupUserTripsAction, restoreUserTripsAction } from '@/actions/backupActions';
+import { backupUserTripsToServerAction, listUserBackupsAction, restoreFromBackupAction } from '@/actions/backupActions';
 import {
   Dialog,
   DialogContent,
@@ -17,112 +17,117 @@ import {
   DialogFooter,
   DialogClose,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { format } from "date-fns";
+import { arSA } from "date-fns/locale";
+
+interface BackupItem {
+  id: string;
+  backup_name: string;
+  created_at: string;
+}
 
 export default function DashboardPage() {
   const { toast } = useToast();
   const [isBackingUp, setIsBackingUp] = React.useState(false);
   const [isRestoring, setIsRestoring] = React.useState(false);
   const [isRestoreDialogOpen, setIsRestoreDialogOpen] = React.useState(false);
-  const [selectedFile, setSelectedFile] = React.useState<File | null>(null);
+  
+  const [availableBackups, setAvailableBackups] = React.useState<BackupItem[]>([]);
+  const [selectedBackupId, setSelectedBackupId] = React.useState<string | undefined>(undefined);
+  const [isLoadingBackups, setIsLoadingBackups] = React.useState(false);
 
-  const handleBackup = async () => {
+  const handleCreateBackup = async () => {
     setIsBackingUp(true);
     try {
-      const result = await backupUserTripsAction();
-      if (result.success && result.data) {
-        const jsonData = result.data;
-        const blob = new Blob([jsonData], { type: "application/json" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `ohda_backup_${new Date().toISOString().split('T')[0]}.json`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+      const result = await backupUserTripsToServerAction();
+      if (result.success && result.backupName) {
         toast({
-          title: "تم النسخ الاحتياطي بنجاح",
-          description: "تم تنزيل بيانات رحلاتك.",
+          title: "تم إنشاء نسخة احتياطية على الخادم",
+          description: `تم حفظ النسخة "${result.backupName}" بنجاح.`,
         });
       } else {
-        throw new Error(result.error || "فشل النسخ الاحتياطي.");
+        throw new Error(result.error || "فشل النسخ الاحتياطي على الخادم.");
       }
     } catch (error: any) {
       toast({
         variant: "destructive",
         title: "خطأ في النسخ الاحتياطي",
-        description: error.message || "لم يتمكن من إنشاء نسخة احتياطية.",
+        description: error.message || "لم يتمكن من إنشاء نسخة احتياطية على الخادم.",
       });
     } finally {
       setIsBackingUp(false);
     }
   };
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (event.target.files && event.target.files[0]) {
-      setSelectedFile(event.target.files[0]);
-    } else {
-      setSelectedFile(null);
+  const fetchAvailableBackups = async () => {
+    setIsLoadingBackups(true);
+    setSelectedBackupId(undefined); // Reset selection
+    try {
+      const result = await listUserBackupsAction();
+      if (result.success && result.backups) {
+        setAvailableBackups(result.backups);
+        if (result.backups.length === 0) {
+          toast({
+            variant: "default",
+            title: "لا توجد نسخ احتياطية",
+            description: "لم يتم العثور على نسخ احتياطية محفوظة على الخادم.",
+          });
+        }
+      } else {
+        setAvailableBackups([]);
+        throw new Error(result.error || "فشل في جلب قائمة النسخ الاحتياطية.");
+      }
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "خطأ في جلب النسخ",
+        description: error.message || "لم نتمكن من جلب قائمة النسخ الاحتياطية.",
+      });
+    } finally {
+      setIsLoadingBackups(false);
     }
   };
 
-  const handleRestore = async () => {
-    if (!selectedFile) {
+  React.useEffect(() => {
+    if (isRestoreDialogOpen) {
+      fetchAvailableBackups();
+    }
+  }, [isRestoreDialogOpen]);
+
+  const handleRestoreFromServer = async () => {
+    if (!selectedBackupId) {
       toast({
         variant: "destructive",
-        title: "لم يتم اختيار ملف",
-        description: "يرجى اختيار ملف النسخ الاحتياطي أولاً.",
+        title: "لم يتم اختيار نسخة",
+        description: "يرجى اختيار نسخة احتياطية من القائمة أولاً.",
       });
       return;
     }
 
     setIsRestoring(true);
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      try {
-        const fileContent = e.target?.result as string;
-        if (!fileContent) {
-          throw new Error("فشل في قراءة محتوى الملف.");
-        }
-        // Validate if it's JSON (basic check)
-        try {
-          JSON.parse(fileContent);
-        } catch (jsonError) {
-          throw new Error("الملف المختار ليس بتنسيق JSON صالح.");
-        }
-
-        const result = await restoreUserTripsAction(selectedFile.name, fileContent);
-        if (result.success) {
-          toast({
-            title: "تمت الاستعادة بنجاح",
-            description: "تم استيراد بيانات رحلاتك. قد تحتاج إلى تحديث الصفحة لرؤية التغييرات.",
-          });
-          setIsRestoreDialogOpen(false);
-          setSelectedFile(null);
-        } else {
-          throw new Error(result.error || "فشل في استعادة البيانات.");
-        }
-      } catch (error: any) {
+    try {
+      const result = await restoreFromBackupAction(selectedBackupId);
+      if (result.success) {
         toast({
-          variant: "destructive",
-          title: "خطأ في الاستعادة",
-          description: error.message || "لم يتمكن من استعادة البيانات من الملف.",
+          title: "تمت الاستعادة بنجاح",
+          description: "تم استيراد بيانات رحلاتك من النسخة الاحتياطية على الخادم. قد تحتاج إلى تحديث الصفحة لرؤية التغييرات.",
         });
-      } finally {
-        setIsRestoring(false);
+        setIsRestoreDialogOpen(false);
+        setSelectedBackupId(undefined);
+      } else {
+        throw new Error(result.error || "فشل في استعادة البيانات من الخادم.");
       }
-    };
-    reader.onerror = () => {
+    } catch (error: any) {
       toast({
         variant: "destructive",
-        title: "خطأ في قراءة الملف",
-        description: "لم نتمكن من قراءة الملف المختار.",
+        title: "خطأ في الاستعادة",
+        description: error.message || "لم يتمكن من استعادة البيانات من النسخة المختارة.",
       });
+    } finally {
       setIsRestoring(false);
-    };
-    reader.readAsText(selectedFile);
+    }
   };
 
   return (
@@ -158,63 +163,85 @@ export default function DashboardPage() {
         </div>
         <div className="pt-8 border-t mt-8">
             <p className="text-xl font-semibold mb-4">
-             إدارة البيانات:
+             إدارة البيانات (على الخادم):
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <Button 
-                    onClick={handleBackup} 
+                    onClick={handleCreateBackup} 
                     disabled={isBackingUp}
                     size="lg" 
                     variant="secondary"
                     className="w-full sm:w-auto text-lg py-7 px-8 shadow-md hover:shadow-lg transition-shadow"
                 >
-                    {isBackingUp ? <Loader2 className="ms-2 h-5 w-5 animate-spin" /> : <Download className="ms-2 h-6 w-6" />}
-                    {isBackingUp ? 'جارٍ النسخ...' : 'النسخ الاحتياطي لبياناتي'}
+                    {isBackingUp ? <Loader2 className="ms-2 h-5 w-5 animate-spin" /> : <DatabaseBackup className="ms-2 h-6 w-6" />}
+                    {isBackingUp ? 'جارٍ الحفظ...' : 'إنشاء نسخة احتياطية على الخادم'}
                 </Button>
                 <Button 
                     onClick={() => setIsRestoreDialogOpen(true)} 
-                    disabled={isRestoring}
+                    disabled={isRestoring} // Should not be disabled by this button's action
                     size="lg" 
                     variant="secondary"
                     className="w-full sm:w-auto text-lg py-7 px-8 shadow-md hover:shadow-lg transition-shadow"
                 >
-                    <Upload className="ms-2 h-6 w-6" />
-                    استعادة بياناتي
+                    <DatabaseZap className="ms-2 h-6 w-6" />
+                    استعادة نسخة من الخادم
                 </Button>
             </div>
         </div>
       </div>
 
-      <Dialog open={isRestoreDialogOpen} onOpenChange={setIsRestoreDialogOpen}>
+      <Dialog open={isRestoreDialogOpen} onOpenChange={(open) => {
+          setIsRestoreDialogOpen(open);
+          if (!open) {
+            setAvailableBackups([]);
+            setSelectedBackupId(undefined);
+          }
+        }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>استعادة البيانات من نسخة احتياطية</DialogTitle>
+            <DialogTitle>استعادة البيانات من نسخة احتياطية على الخادم</DialogTitle>
             <DialogDescription>
-              اختر ملف النسخ الاحتياطي (.json) الذي قمت بتنزيله مسبقًا. سيتم استبدال جميع الرحلات الحالية ببيانات الملف.
+              اختر نسخة احتياطية من القائمة أدناه. سيتم استبدال جميع الرحلات الحالية ببيانات النسخة المختارة.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="backupFile" className="text-right col-span-1">
-                ملف النسخة
-              </Label>
-              <Input 
-                id="backupFile" 
-                type="file" 
-                accept=".json" 
-                onChange={handleFileChange}
-                className="col-span-3" 
-              />
-            </div>
-            {selectedFile && <p className="text-sm text-muted-foreground">الملف المختار: {selectedFile.name}</p>}
+            {isLoadingBackups ? (
+                <div className="flex items-center justify-center p-4">
+                    <Loader2 className="ms-2 h-5 w-5 animate-spin" />
+                    <span>جاري تحميل قائمة النسخ...</span>
+                </div>
+            ) : availableBackups.length > 0 ? (
+              <div className="grid grid-cols-1 items-center gap-4">
+                <Label htmlFor="backupSelect" className="text-right col-span-1">
+                  اختر نسخة
+                </Label>
+                <Select value={selectedBackupId} onValueChange={setSelectedBackupId} dir="rtl">
+                  <SelectTrigger id="backupSelect">
+                    <SelectValue placeholder="اختر نسخة احتياطية..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableBackups.map(backup => (
+                      <SelectItem key={backup.id} value={backup.id}>
+                        {backup.backup_name} (تاريخ الإنشاء: {format(new Date(backup.created_at), "PPpp", { locale: arSA })})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : (
+                <p className="text-sm text-muted-foreground text-center p-4">لا توجد نسخ احتياطية متاحة على الخادم.</p>
+            )}
           </div>
           <DialogFooter>
             <DialogClose asChild>
-              <Button variant="outline" onClick={() => setSelectedFile(null)}>إلغاء</Button>
+              <Button variant="outline" onClick={() => {
+                setAvailableBackups([]);
+                setSelectedBackupId(undefined);
+              }}>إلغاء</Button>
             </DialogClose>
-            <Button onClick={handleRestore} disabled={!selectedFile || isRestoring}>
+            <Button onClick={handleRestoreFromServer} disabled={!selectedBackupId || isRestoring || isLoadingBackups}>
               {isRestoring ? <Loader2 className="ms-2 h-4 w-4 animate-spin" /> : null}
-              {isRestoring ? 'جارٍ الاستعادة...' : 'رفع واستعادة'}
+              {isRestoring ? 'جارٍ الاستعادة...' : 'استعادة النسخة المختارة'}
             </Button>
           </DialogFooter>
         </DialogContent>

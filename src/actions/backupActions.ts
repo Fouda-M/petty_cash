@@ -1,9 +1,11 @@
 
 'use server';
 
-import { createServerClient, type CookieOptions } from '@supabase/ssr'; // Updated import
+import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
-import type { SavedTrip, Transaction } from '@/types'; // Assuming SavedTrip is the primary type to backup/restore
+import type { SavedTrip } from '@/types';
+import { format } from 'date-fns';
+import { arSA } from 'date-fns/locale';
 
 // Helper function to get Supabase client for server actions
 function getSupabaseServerClient() {
@@ -20,8 +22,6 @@ function getSupabaseServerClient() {
           try {
             cookieStore.set({ name, value, ...options });
           } catch (error) {
-            // This usually happens when the path is not available.
-            // If you see this error, please check your Next.js Middleware configuration
             console.warn(`[Supabase Server Client] Failed to set cookie '${name}'. Error:`, error);
           }
         },
@@ -29,8 +29,6 @@ function getSupabaseServerClient() {
           try {
             cookieStore.set({ name, value: '', ...options });
           } catch (error) {
-            // This usually happens when the path is not available.
-            // If you see this error, please check your Next.js Middleware configuration
             console.warn(`[Supabase Server Client] Failed to remove cookie '${name}'. Error:`, error);
           }
         },
@@ -39,85 +37,135 @@ function getSupabaseServerClient() {
   );
 }
 
+// IMPORTANT: User needs to manually create a 'user_backups' table in Supabase:
+// CREATE TABLE public.user_backups (
+//     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+//     user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+//     backup_name TEXT NOT NULL,
+//     trip_data JSONB NOT NULL,
+//     created_at TIMESTAMPTZ DEFAULT now() NOT NULL
+// );
+// And set up RLS policies for it.
 
-export async function backupUserTripsAction(): Promise<{ success: boolean; data?: string; error?: string }> {
-  console.log("[Backup Action] Attempting to backup user trips...");
+export async function backupUserTripsToServerAction(): Promise<{ success: boolean; error?: string; backupName?: string }> {
+  console.log("[Backup Action] Attempting to backup user trips to server...");
   const supabase = getSupabaseServerClient();
   
   const { data: { user } , error: userError } = await supabase.auth.getUser();
 
   if (userError || !user) {
     console.error("[Backup Action] User not authenticated for server action:", userError?.message);
-    return { success: false, error: "User not authenticated." };
+    return { success: false, error: "المستخدم غير مصادق عليه." };
   }
 
   try {
-    const { data: trips, error } = await supabase
+    const { data: trips, error: fetchError } = await supabase
       .from('trips')
       .select('*')
       .eq('user_id', user.id);
 
-    if (error) {
-      console.error("[Backup Action] Error fetching trips:", error.message);
-      return { success: false, error: `فشل في جلب الرحلات: ${error.message}` };
+    if (fetchError) {
+      console.error("[Backup Action] Error fetching trips for server backup:", fetchError.message);
+      return { success: false, error: `فشل في جلب الرحلات: ${fetchError.message}` };
     }
 
-    if (!trips) {
-      console.log("[Backup Action] No trips found for user.");
-      return { success: true, data: JSON.stringify([], null, 2) }; // Return empty array if no trips
+    if (!trips || trips.length === 0) {
+      console.log("[Backup Action] No trips found for user to backup to server.");
+      return { success: false, error: "لا توجد رحلات لإنشاء نسخة احتياطية منها." };
     }
     
-    // Basic serialization, ensure dates are ISO strings if they are Date objects
-    const serializableTrips = trips.map(trip => ({
-        ...trip,
-        details: {
-            ...trip.details,
-            tripStartDate: trip.details.tripStartDate instanceof Date ? trip.details.tripStartDate.toISOString() : trip.details.tripStartDate,
-            tripEndDate: trip.details.tripEndDate instanceof Date ? trip.details.tripEndDate.toISOString() : trip.details.tripEndDate,
-        },
-        transactions: Array.isArray(trip.transactions) ? trip.transactions.map((t: any) => ({
-            ...t,
-            date: t.date instanceof Date ? t.date.toISOString() : t.date,
-        })) : [],
-        created_at: trip.created_at instanceof Date ? trip.created_at.toISOString() : trip.created_at,
-        updated_at: trip.updated_at instanceof Date ? trip.updated_at.toISOString() : trip.updated_at,
-    }));
+    const backupName = `نسخة احتياطية - ${format(new Date(), "yyyy-MM-dd HH:mm:ss", { locale: arSA })}`;
+    const tripData = trips; // Already in a suitable format (array of objects)
 
+    const { error: insertBackupError } = await supabase
+      .from('user_backups')
+      .insert({
+        user_id: user.id,
+        backup_name: backupName,
+        trip_data: tripData,
+      });
 
-    const jsonData = JSON.stringify(serializableTrips, null, 2);
-    console.log("[Backup Action] Backup data generated for user:", user.id);
-    return { success: true, data: jsonData };
+    if (insertBackupError) {
+      console.error("[Backup Action] Error inserting backup to user_backups table:", insertBackupError.message);
+      return { success: false, error: `فشل في حفظ النسخة الاحتياطية على الخادم: ${insertBackupError.message}` };
+    }
+
+    console.log(`[Backup Action] Backup '${backupName}' created successfully on server for user:`, user.id);
+    return { success: true, backupName };
 
   } catch (e: any) {
-    console.error("[Backup Action] General error during backup:", e.message);
-    return { success: false, error: `خطأ عام أثناء النسخ الاحتياطي: ${e.message}` };
+    console.error("[Backup Action] General error during server backup:", e.message);
+    return { success: false, error: `خطأ عام أثناء النسخ الاحتياطي على الخادم: ${e.message}` };
   }
 }
 
-export async function restoreUserTripsAction(fileName: string, fileContent: string): Promise<{ success: boolean; error?: string }> {
-  console.log(`[Restore Action] Attempting to restore user trips from file: ${fileName}`);
+export async function listUserBackupsAction(): Promise<{ success: boolean; backups?: Array<{id: string; backup_name: string; created_at: string}>; error?: string }> {
+  console.log("[List Backups Action] Attempting to list user backups...");
+  const supabase = getSupabaseServerClient();
+
+  const { data: { user } , error: userError } = await supabase.auth.getUser();
+  if (userError || !user) {
+    console.error("[List Backups Action] User not authenticated:", userError?.message);
+    return { success: false, error: "المستخدم غير مصادق عليه." };
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('user_backups')
+      .select('id, backup_name, created_at')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error("[List Backups Action] Error fetching backups:", error.message);
+      return { success: false, error: `فشل في جلب قائمة النسخ الاحتياطية: ${error.message}` };
+    }
+    return { success: true, backups: data || [] };
+  } catch (e: any) {
+    console.error("[List Backups Action] General error:", e.message);
+    return { success: false, error: `خطأ عام: ${e.message}` };
+  }
+}
+
+export async function restoreFromBackupAction(backupId: string): Promise<{ success: boolean; error?: string }> {
+  console.log(`[Restore Action] Attempting to restore user trips from server backup ID: ${backupId}`);
   const supabase = getSupabaseServerClient();
 
   const { data: { user } , error: authError } = await supabase.auth.getUser();
   if (authError || !user) {
     console.error("[Restore Action] User not authenticated for server action:", authError?.message);
-    return { success: false, error: "User not authenticated." };
+    return { success: false, error: "المستخدم غير مصادق عليه." };
   }
 
   let tripsToRestore: SavedTrip[];
   try {
-    tripsToRestore = JSON.parse(fileContent);
-    if (!Array.isArray(tripsToRestore)) {
-      throw new Error("ملف النسخ الاحتياطي غير صالح (يجب أن يكون مصفوفة من الرحلات).");
+    const { data: backupData, error: fetchBackupError } = await supabase
+      .from('user_backups')
+      .select('trip_data')
+      .eq('id', backupId)
+      .eq('user_id', user.id)
+      .single();
+
+    if (fetchBackupError) {
+      console.error("[Restore Action] Error fetching backup data from server:", fetchBackupError.message);
+      return { success: false, error: `فشل في جلب بيانات النسخة الاحتياطية: ${fetchBackupError.message}` };
     }
+    if (!backupData || !backupData.trip_data) {
+        return { success: false, error: "لم يتم العثور على بيانات النسخة الاحتياطية أو أنها فارغة." };
+    }
+    tripsToRestore = backupData.trip_data as SavedTrip[];
+    if (!Array.isArray(tripsToRestore)) {
+      throw new Error("بيانات النسخة الاحتياطية غير صالحة (يجب أن تكون مصفوفة من الرحلات).");
+    }
+
   } catch (e: any) {
-    console.error("[Restore Action] Error parsing backup file:", e.message);
-    return { success: false, error: `فشل في تحليل ملف النسخ الاحتياطي: ${e.message}` };
+    console.error("[Restore Action] Error parsing backup data from server:", e.message);
+    return { success: false, error: `فشل في تحليل بيانات النسخة الاحتياطية: ${e.message}` };
   }
 
   if (tripsToRestore.length === 0) {
-    console.log("[Restore Action] Backup file contains no trips to restore.");
-    return { success: true, error: "ملف النسخ الاحتياطي فارغ." }; 
+    console.log("[Restore Action] Server backup contains no trips to restore.");
+    return { success: true, error: "النسخة الاحتياطية فارغة." }; 
   }
 
   try {
@@ -140,7 +188,7 @@ export async function restoreUserTripsAction(fileName: string, fileContent: stri
         }
         const transactions = Array.isArray(trip.transactions) ? trip.transactions.map(t => ({
             ...t,
-            date: typeof t.date === 'string' ? t.date : new Date(t.date).toISOString(),
+            date: typeof t.date === 'string' ? t.date : new Date(t.date).toISOString(), // Ensure date is string for DB
             amount: Number(t.amount) || 0,
         })) : [];
 
@@ -150,7 +198,10 @@ export async function restoreUserTripsAction(fileName: string, fileContent: stri
             tripEndDate: typeof trip.details.tripEndDate === 'string' ? trip.details.tripEndDate : new Date(trip.details.tripEndDate).toISOString(),
         };
         
-      const { id, ...tripDataToInsert } = trip;
+      // The ID from the backup is the trip's original ID. We want the DB to generate new ones if inserting.
+      // However, if the backup format relies on original trip IDs for some reason, this might need adjustment.
+      // For now, let Supabase generate new IDs for the restored trips.
+      const { id, ...tripDataToInsert } = trip; 
       
       return {
         ...tripDataToInsert,
@@ -162,12 +213,11 @@ export async function restoreUserTripsAction(fileName: string, fileContent: stri
     }).filter(trip => trip !== null); 
 
     if (tripsForDb.length === 0 && tripsToRestore.length > 0) {
-        return { success: false, error: "جميع الرحلات في ملف النسخ الاحتياطي كانت غير صالحة للاستعادة." };
+        return { success: false, error: "جميع الرحلات في النسخة الاحتياطية كانت غير صالحة للاستعادة." };
     }
     if (tripsForDb.length === 0) {
-        return { success: true, error: "لا توجد رحلات صالحة في الملف للاستعادة بعد التصفية." };
+        return { success: true, error: "لا توجد رحلات صالحة في النسخة الاحتياطية للاستعادة بعد التصفية." };
     }
-
 
     console.log(`[Restore Action] Inserting ${tripsForDb.length} trips for user ${user.id}...`);
     const { error: insertError } = await supabase
@@ -187,3 +237,5 @@ export async function restoreUserTripsAction(fileName: string, fileContent: stri
     return { success: false, error: `خطأ عام أثناء عملية الاستعادة: ${e.message}` };
   }
 }
+
+    
