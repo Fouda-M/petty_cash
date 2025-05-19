@@ -1,9 +1,9 @@
 
 "use client";
 
-import * as React from "react";
+import *a_s React from "react";
 import Link from 'next/link';
-import { useRouter } from 'next/navigation'; 
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import {
@@ -16,8 +16,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ArrowRight, ListChecks, User, MapPin, CalendarDays, Hash, Edit, Trash2, Wallet, TrendingUp, TrendingDown, Loader2 } from 'lucide-react';
-import type { SavedTrip, Transaction } from "@/types";
+import { ArrowRight, ListChecks, User, MapPin, CalendarDays, Hash, Edit, Trash2, Wallet, TrendingUp, TrendingDown, Loader2, PlusCircle } from 'lucide-react';
+import type { SavedTrip } from "@/types"; // Transaction type not directly needed here unless for detailed display later
 import { Currency, TransactionType } from "@/types";
 import { format } from "date-fns";
 import { arSA } from "date-fns/locale";
@@ -25,51 +25,72 @@ import { useToast } from "@/hooks/use-toast";
 import { convertCurrency } from "@/lib/exchangeRates";
 import { getCurrencyInfo } from "@/lib/constants";
 import { cn } from "@/lib/utils";
+import { supabase } from '@/lib/supabase/client';
+import type { User as SupabaseUser } from "@supabase/supabase-js";
 
-
-const ALL_SAVED_TRIPS_KEY = "allSavedTrips_v1";
-const EDITING_TRIP_ID_KEY = "editingTripId_v1"; 
 
 export default function SavedTripsPage() {
+  const [currentUser, setCurrentUser] = React.useState<SupabaseUser | null>(null);
   const [savedTrips, setSavedTrips] = React.useState<SavedTrip[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
+  const [isDeleting, setIsDeleting] = React.useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = React.useState(false);
   const [tripToDelete, setTripToDelete] = React.useState<SavedTrip | null>(null);
   const { toast } = useToast();
-  const router = useRouter(); 
+  const router = useRouter();
 
   React.useEffect(() => {
-    setIsLoading(true);
-    try {
-      const storedTripsJson = localStorage.getItem(ALL_SAVED_TRIPS_KEY);
-      if (storedTripsJson) {
-        const parsedTrips = (JSON.parse(storedTripsJson) as SavedTrip[]).map(trip => ({
+    const fetchUserAndTrips = async () => {
+      setIsLoading(true);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) {
+        toast({ title: "غير مصرح به", description: "يرجى تسجيل الدخول لعرض الرحلات المحفوظة.", variant: "destructive" });
+        router.push('/');
+        setIsLoading(false);
+        return;
+      }
+      setCurrentUser(session.user);
+
+      const { data: tripsData, error: tripsError } = await supabase
+        .from('trips')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .order('created_at', { ascending: false });
+
+      if (tripsError) {
+        console.error("Failed to load saved trips from Supabase:", tripsError);
+        toast({ variant: "destructive", title: "خطأ في تحميل الرحلات", description: tripsError.message });
+        setSavedTrips([]);
+      } else if (tripsData) {
+        const parsedTrips = (tripsData as any[]).map(trip => ({
+          ...trip,
+          // Ensure nested JSONB fields are parsed if Supabase doesn't do it automatically, though it usually does for client libs
+          details: typeof trip.details === 'string' ? JSON.parse(trip.details) : trip.details,
+          transactions: typeof trip.transactions === 'string' ? JSON.parse(trip.transactions) : trip.transactions,
+          exchangeRates: typeof trip.exchange_rates === 'string' ? JSON.parse(trip.exchange_rates) : trip.exchange_rates,
+        })).map(trip => ({ // Second map for date parsing after ensuring objects
           ...trip,
           details: {
             ...trip.details,
             tripStartDate: new Date(trip.details.tripStartDate),
             tripEndDate: new Date(trip.details.tripEndDate),
           },
-          transactions: (trip.transactions || []).map(t => ({
+          transactions: (trip.transactions || []).map((t: any) => ({
             ...t,
             date: new Date(t.date),
-            amount: Number(t.amount) || 0, // Ensure amount is a number
+            amount: Number(t.amount) || 0,
           })),
-          createdAt: trip.createdAt ? new Date(trip.createdAt).toISOString() : new Date().toISOString(),
-          updatedAt: trip.updatedAt ? new Date(trip.updatedAt).toISOString() : undefined,
+          createdAt: trip.created_at ? new Date(trip.created_at).toISOString() : new Date().toISOString(),
+          updatedAt: trip.updated_at ? new Date(trip.updated_at).toISOString() : undefined,
         }));
-        parsedTrips.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
         setSavedTrips(parsedTrips);
       } else {
         setSavedTrips([]);
       }
-    } catch (error) {
-      console.error("Failed to load saved trips from localStorage:", error);
-      toast({variant: "destructive", title: "خطأ في تحميل الرحلات", description: "لم يتمكن من قراءة بيانات الرحلات المحفوظة."})
-      setSavedTrips([]); 
-    }
-    setIsLoading(false);
-  }, [toast]);
+      setIsLoading(false);
+    };
+    fetchUserAndTrips();
+  }, [router, toast]);
 
   const getDestinationDisplay = (trip: SavedTrip): string => {
     if (trip.details.destinationType === "INTERNAL" && trip.details.cityName) {
@@ -86,30 +107,32 @@ export default function SavedTripsPage() {
     setIsDeleteDialogOpen(true);
   };
 
-  const confirmDelete = () => {
-    if (!tripToDelete) return;
+  const confirmDelete = async () => {
+    if (!tripToDelete || !currentUser) return;
+    setIsDeleting(true);
     try {
-      const updatedTrips = savedTrips.filter(t => t.id !== tripToDelete.id);
-      localStorage.setItem(ALL_SAVED_TRIPS_KEY, JSON.stringify(updatedTrips));
-      setSavedTrips(updatedTrips);
+      const { error } = await supabase
+        .from('trips')
+        .delete()
+        .eq('id', tripToDelete.id)
+        .eq('user_id', currentUser.id);
+
+      if (error) throw error;
+
+      setSavedTrips(prev => prev.filter(t => t.id !== tripToDelete.id));
       toast({ title: "تم حذف الرحلة", description: `تم حذف رحلة "${tripToDelete.name}".` });
-    } catch (error) {
-      console.error("Error deleting trip:", error);
-      toast({ variant: "destructive", title: "خطأ في الحذف", description: "لم يتم حذف الرحلة." });
+    } catch (error: any) {
+      console.error("Error deleting trip from Supabase:", error);
+      toast({ variant: "destructive", title: "خطأ في الحذف", description: error.message || "لم يتم حذف الرحلة." });
     } finally {
+      setIsDeleting(false);
       setIsDeleteDialogOpen(false);
       setTripToDelete(null);
     }
   };
 
   const handleEditRequest = (tripId: string) => {
-    try {
-      localStorage.setItem(EDITING_TRIP_ID_KEY, tripId);
-      router.push('/manage-trip');
-    } catch (error) {
-      console.error("Error setting trip for editing:", error);
-      toast({ variant: "destructive", title: "خطأ", description: "لم يتمكن من تجهيز الرحلة للتعديل." });
-    }
+    router.push(`/manage-trip?edit=${tripId}`);
   };
 
   const calculateTripProfitLossForDisplay = (trip: SavedTrip, targetDisplayCurrency: Currency = Currency.EGP) => {
@@ -117,6 +140,16 @@ export default function SavedTripsPage() {
     let totalExpenses = 0;
     let totalCustodyOwner = 0;
     let totalDriverFee = 0;
+
+    if (!trip.transactions || !Array.isArray(trip.transactions)) {
+        console.warn(`Trip with ID ${trip.id} has no transactions array or it's invalid.`);
+        return 0; // Or handle as an error
+    }
+    if (!trip.exchangeRates) {
+        console.warn(`Trip with ID ${trip.id} has no exchangeRates object.`);
+        return 0; // Or handle as an error
+    }
+
 
     trip.transactions.forEach(t => {
       const convertedAmount = convertCurrency(t.amount, t.currency, targetDisplayCurrency, trip.exchangeRates);
@@ -229,7 +262,7 @@ export default function SavedTripsPage() {
                   </div>
                   <div className="flex items-center text-muted-foreground">
                     <Hash className="ms-2 h-4 w-4 text-primary/80" />
-                    <span>عدد المعاملات: {trip.transactions.length}</span>
+                    <span>عدد المعاملات: {trip.transactions?.length || 0}</span>
                   </div>
                 </CardContent>
                  <CardFooter className="pt-3 mt-auto border-t flex-col items-start space-y-2">
@@ -244,22 +277,27 @@ export default function SavedTripsPage() {
                         </span>
                     </div>
                     <div className="flex gap-2 mt-3 w-full">
-                    <Button 
-                        variant="outline" 
-                        size="sm" 
-                        className="flex-1" 
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1"
                         onClick={() => handleEditRequest(trip.id)}
                     >
                         <Edit className="ms-1 h-3.5 w-3.5" />
                         تعديل
                     </Button>
-                    <Button 
-                        variant="destructive" 
-                        size="sm" 
-                        className="flex-1" 
+                    <Button
+                        variant="destructive"
+                        size="sm"
+                        className="flex-1"
                         onClick={() => handleDeleteRequest(trip)}
+                        disabled={isDeleting && tripToDelete?.id === trip.id}
                     >
-                        <Trash2 className="ms-1 h-3.5 w-3.5" />
+                        {isDeleting && tripToDelete?.id === trip.id ? (
+                            <Loader2 className="ms-1 h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                            <Trash2 className="ms-1 h-3.5 w-3.5" />
+                        )}
                         مسح الرحلة
                     </Button>
                     </div>
@@ -281,8 +319,10 @@ export default function SavedTripsPage() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setTripToDelete(null)}>إلغاء</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDelete}>تأكيد الحذف</AlertDialogAction>
+            <AlertDialogCancel onClick={() => setTripToDelete(null)} disabled={isDeleting}>إلغاء</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} disabled={isDeleting}>
+              {isDeleting ? <Loader2 className="ms-2 h-4 w-4 animate-spin" /> : "تأكيد الحذف"}
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
