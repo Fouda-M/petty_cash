@@ -7,17 +7,17 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import Logo from '@/components/shared/Logo';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { useToast } from "@/hooks/use-toast"; // For potential future use
+import { useToast } from "@/hooks/use-toast";
 import * as React from "react";
 
-export default function LoginPage() {
-  const { toast } = useToast(); // Example if you want to show toasts
+export default function SignupPage() {
+  const { toast } = useToast();
 
-  const handleLogin = (event: React.FormEvent) => {
+  const handleSignup = (event: React.FormEvent) => {
     event.preventDefault();
-    // TODO: Implement actual login logic here
+    // TODO: Implement actual signup logic here
     toast({
-      title: "تسجيل الدخول (قيد الإنشاء)",
+      title: "إنشاء حساب (قيد الإنشاء)",
       description: "سيتم تفعيل هذه الوظيفة قريباً.",
     });
   };
@@ -29,11 +29,11 @@ export default function LoginPage() {
           <div className="mx-auto mb-6">
             <Logo />
           </div>
-          <CardTitle className="text-3xl font-bold">تسجيل الدخول</CardTitle>
-          <CardDescription>مرحباً بعودتك! يرجى إدخال بياناتك للمتابعة.</CardDescription>
+          <CardTitle className="text-3xl font-bold">إنشاء حساب جديد</CardTitle>
+          <CardDescription>انضم إلينا! أدخل بياناتك لإنشاء حساب.</CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleLogin} className="space-y-6">
+          <form onSubmit={handleSignup} className="space-y-6">
             <div className="space-y-2">
               <Label htmlFor="email">البريد الإلكتروني</Label>
               <Input id="email" type="email" placeholder="example@mail.com" required />
@@ -42,15 +42,19 @@ export default function LoginPage() {
               <Label htmlFor="password">كلمة المرور</Label>
               <Input id="password" type="password" placeholder="********" required />
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="confirm-password">تأكيد كلمة المرور</Label>
+              <Input id="confirm-password" type="password" placeholder="********" required />
+            </div>
             <Button type="submit" className="w-full text-lg py-6">
-              تسجيل الدخول
+              إنشاء حساب
             </Button>
           </form>
           <div className="mt-6 text-center">
             <p className="text-sm text-muted-foreground">
-              ليس لديك حساب؟{' '}
-              <Link href="/auth/signup" className="font-medium text-primary hover:underline">
-                قم بإنشاء حساب جديد
+              لديك حساب بالفعل؟{' '}
+              <Link href="/" className="font-medium text-primary hover:underline">
+                قم بتسجيل الدخول
               </Link>
             </p>
           </div>
