@@ -10,9 +10,8 @@ import Logo from '@/components/shared/Logo';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useToast } from "@/hooks/use-toast";
 import * as React from "react";
-import { signInWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '@/lib/firebase/config';
-import { FirebaseError } from 'firebase/app';
+import { supabase } from '@/lib/supabase/client'; // Import Supabase client
+import { AuthApiError } from '@supabase/supabase-js'; // Import Supabase error type
 import { Loader2 } from 'lucide-react';
 
 
@@ -39,33 +38,42 @@ export default function LoginPage() {
     }
 
     try {
-      await signInWithEmailAndPassword(auth, email, password);
-      toast({
-        title: "تم تسجيل الدخول بنجاح!",
-        description: "أهلاً بعودتك! يتم الآن توجيهك إلى لوحة التحكم.",
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
       });
-      router.push('/dashboard'); 
+
+      if (error) {
+        throw error;
+      }
+
+      if (data.user && data.session) {
+        toast({
+          title: "تم تسجيل الدخول بنجاح!",
+          description: "أهلاً بعودتك! يتم الآن توجيهك إلى لوحة التحكم.",
+        });
+        router.push('/dashboard'); 
+      } else {
+        // Should not happen if no error, but as a fallback
+        throw new Error("فشل تسجيل الدخول. لم يتم إرجاع بيانات المستخدم أو الجلسة.");
+      }
     } catch (error) {
       let errorMessage = "فشل تسجيل الدخول. يرجى التحقق من بريدك الإلكتروني وكلمة المرور.";
-       if (error instanceof FirebaseError) {
-        switch (error.code) {
-          case 'auth/user-not-found':
-          case 'auth/wrong-password':
-          case 'auth/invalid-credential':
+       if (error instanceof AuthApiError) {
+        // Supabase specific error handling
+        if (error.message.includes("Invalid login credentials")) {
             errorMessage = "البريد الإلكتروني أو كلمة المرور غير صحيحة.";
-            break;
-          case 'auth/invalid-email':
-            errorMessage = "البريد الإلكتروني المدخل غير صالح.";
-            break;
-          case 'auth/too-many-requests':
-            errorMessage = "تم حظر الوصول مؤقتًا بسبب كثرة محاولات تسجيل الدخول الفاشلة. يرجى المحاولة مرة أخرى لاحقًا.";
-            break;
-          default:
-            console.error("Firebase Login Error:", error);
-            errorMessage = "فشل تسجيل الدخول. رمز الخطأ: " + error.code;
+        } else if (error.message.includes("Email not confirmed")) {
+            errorMessage = "لم يتم تأكيد البريد الإلكتروني. يرجى التحقق من صندوق الوارد الخاص بك.";
+        } else {
+            console.error("Supabase Login Error:", error);
+            errorMessage = error.message || "فشل تسجيل الدخول.";
         }
+      } else if (error instanceof Error) {
+        console.error("Non-Supabase Login Error:", error);
+        errorMessage = error.message;
       } else {
-        console.error("Non-Firebase Login Error:", error);
+        console.error("Unknown Login Error:", error);
       }
       toast({
         variant: "destructive",

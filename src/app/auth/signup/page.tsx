@@ -10,9 +10,8 @@ import Logo from '@/components/shared/Logo';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useToast } from "@/hooks/use-toast";
 import * as React from "react";
-import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '@/lib/firebase/config';
-import { FirebaseError } from 'firebase/app';
+import { supabase } from '@/lib/supabase/client'; // Import Supabase client
+import { AuthApiError } from '@supabase/supabase-js'; // Import Supabase error type
 import { Loader2 } from 'lucide-react';
 
 export default function SignupPage() {
@@ -49,32 +48,46 @@ export default function SignupPage() {
     }
 
     try {
-      await createUserWithEmailAndPassword(auth, email, password);
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+      });
+
+      if (error) {
+        throw error;
+      }
+      
+      // data.user will be null if email confirmation is required and not yet done.
+      // data.session will also be null.
+      // If email confirmation is enabled in Supabase, the user object might be returned but session might be null.
+      // You might want to inform the user to check their email.
+
       toast({
         title: "تم إنشاء الحساب بنجاح!",
-        description: "مرحباً بك! يتم الآن توجيهك إلى لوحة التحكم.",
+        description: data.user?.identities?.length === 0 // A heuristic: if no identities, likely needs confirmation
+          ? "تم إرسال بريد إلكتروني للتأكيد. يرجى التحقق من بريدك لتفعيل الحساب."
+          : "مرحباً بك! يتم الآن توجيهك إلى لوحة التحكم.",
       });
       router.push('/dashboard'); 
     } catch (error) {
       let errorMessage = "حدث خطأ أثناء إنشاء الحساب. يرجى المحاولة مرة أخرى.";
-      if (error instanceof FirebaseError) {
-        switch (error.code) {
-          case 'auth/email-already-in-use':
+      if (error instanceof AuthApiError) {
+        // Supabase specific error handling
+        if (error.message.includes("User already registered")) {
             errorMessage = "هذا البريد الإلكتروني مسجل بالفعل.";
-            break;
-          case 'auth/weak-password':
+        } else if (error.message.includes("Password should be at least 6 characters")) {
             errorMessage = "كلمة المرور ضعيفة جداً. يجب أن تتكون من 6 أحرف على الأقل.";
-            break;
-          case 'auth/invalid-email':
+        } else if (error.message.includes("Unable to validate email address")) {
             errorMessage = "البريد الإلكتروني غير صالح.";
-            break;
-          default:
-            // For other Firebase errors, you might want to log them or show a generic message
-            console.error("Firebase Signup Error:", error);
-            errorMessage = "فشل إنشاء الحساب. رمز الخطأ: " + error.code;
+        } else {
+            console.error("Supabase Signup Error:", error);
+            errorMessage = error.message || "فشل إنشاء الحساب.";
         }
+      } else if (error instanceof Error) {
+        console.error("Non-Supabase Signup Error:", error);
+        errorMessage = error.message;
       } else {
-        console.error("Non-Firebase Signup Error:", error);
+        console.error("Unknown Signup Error:", error);
       }
       toast({
         variant: "destructive",
