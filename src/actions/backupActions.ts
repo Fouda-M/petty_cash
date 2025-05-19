@@ -1,49 +1,28 @@
 
 'use server';
 
-import { createClient } from '@supabase/supabase-js';
-import { cookies } from 'next/headers'; // To get user session on server
+import { createServerActionClient } from '@supabase/ssr';
+import { cookies } from 'next/headers';
 import type { SavedTrip, Transaction } from '@/types'; // Assuming SavedTrip is the primary type to backup/restore
 
-// It's generally better to initialize a Supabase client specifically for server actions
-// using service_role key if admin operations are needed, or by constructing one with the user's JWT.
-// For simplicity and to operate on behalf of the user, we'll try to get user from cookies.
-
-async function getSupabaseClientForUser() {
+async function getSupabaseServerActionClient() {
   const cookieStore = cookies();
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-       auth: {
-        autoRefreshToken: false, 
-        persistSession: false, 
-        detectSessionInUrl: false,
-      },
-    }
-  );
-
-  // This part is crucial and might need adjustment based on how Supabase Auth Helpers for Next.js are set up.
-  // We need to ensure the client is acting as the authenticated user.
-  // The most robust way is usually via `createRouteHandlerClient` or `createServerComponentClient` from `@supabase/auth-helpers-nextjs` or `@supabase/ssr`.
-  // Since this is a simple server action, we might need to manually manage session.
-  
-  const { data: { user } , error: userError } = await supabase.auth.getUser();
-
-  if (userError || !user) {
-    console.error("User not authenticated for server action:", userError?.message);
-    return { user: null, supabase: null, error: "User not authenticated." };
-  }
-  return { user, supabase, error: null };
+  // The URL and Key are typically read from environment variables by createServerActionClient
+  return createServerActionClient({
+    cookies: () => cookieStore,
+  });
 }
 
 
 export async function backupUserTripsAction(): Promise<{ success: boolean; data?: string; error?: string }> {
   console.log("[Backup Action] Attempting to backup user trips...");
+  const supabase = getSupabaseServerActionClient();
   
-  const { user, supabase, error: authError } = await getSupabaseClientForUser();
-  if (authError || !user || !supabase) {
-    return { success: false, error: authError || "User not authenticated." };
+  const { data: { user } , error: userError } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    console.error("[Backup Action] User not authenticated for server action:", userError?.message);
+    return { success: false, error: "User not authenticated." };
   }
 
   try {
@@ -91,10 +70,12 @@ export async function backupUserTripsAction(): Promise<{ success: boolean; data?
 
 export async function restoreUserTripsAction(fileName: string, fileContent: string): Promise<{ success: boolean; error?: string }> {
   console.log(`[Restore Action] Attempting to restore user trips from file: ${fileName}`);
+  const supabase = getSupabaseServerActionClient();
 
-  const { user, supabase, error: authError } = await getSupabaseClientForUser();
-  if (authError || !user || !supabase) {
-    return { success: false, error: authError || "User not authenticated." };
+  const { data: { user } , error: authError } = await supabase.auth.getUser();
+  if (authError || !user) {
+    console.error("[Restore Action] User not authenticated for server action:", authError?.message);
+    return { success: false, error: "User not authenticated." };
   }
 
   let tripsToRestore: SavedTrip[];
@@ -110,12 +91,10 @@ export async function restoreUserTripsAction(fileName: string, fileContent: stri
 
   if (tripsToRestore.length === 0) {
     console.log("[Restore Action] Backup file contains no trips to restore.");
-    return { success: true, error: "ملف النسخ الاحتياطي فارغ." }; // Or success:true if empty restore is fine
+    return { success: true, error: "ملف النسخ الاحتياطي فارغ." }; 
   }
 
   try {
-    // Strategy: Delete all existing trips for the user, then insert new ones.
-    // This is simpler but destructive. A merge strategy would be more complex.
     console.log(`[Restore Action] Deleting existing trips for user ${user.id}...`);
     const { error: deleteError } = await supabase
       .from('trips')
@@ -128,17 +107,13 @@ export async function restoreUserTripsAction(fileName: string, fileContent: stri
     }
     console.log(`[Restore Action] Existing trips deleted for user ${user.id}.`);
 
-    // Prepare trips for insertion
     const tripsForDb = tripsToRestore.map(trip => {
-        // Basic validation/transformation
         if (!trip.details || !trip.name) {
             console.warn("[Restore Action] Skipping trip due to missing details or name:", trip);
-            return null; // Skip invalid trip
+            return null; 
         }
-        // Ensure transactions is an array
         const transactions = Array.isArray(trip.transactions) ? trip.transactions.map(t => ({
             ...t,
-            // Ensure date is a string or valid for Supabase, amount is number
             date: typeof t.date === 'string' ? t.date : new Date(t.date).toISOString(),
             amount: Number(t.amount) || 0,
         })) : [];
@@ -149,9 +124,6 @@ export async function restoreUserTripsAction(fileName: string, fileContent: stri
             tripEndDate: typeof trip.details.tripEndDate === 'string' ? trip.details.tripEndDate : new Date(trip.details.tripEndDate).toISOString(),
         };
         
-      // Remove 'id' if it exists, as Supabase will generate a new one
-      // Or, if you want to preserve IDs, you'd need a more complex UPSERT.
-      // For simplicity, let's assume new IDs will be generated.
       const { id, ...tripDataToInsert } = trip;
       
       return {
@@ -159,12 +131,8 @@ export async function restoreUserTripsAction(fileName: string, fileContent: stri
         details,
         transactions,
         user_id: user.id,
-        // Supabase will handle created_at and updated_at by default if table is set up
-        // If 'created_at' is in backup and you want to preserve it, ensure column allows it and pass it.
-        // created_at: trip.createdAt ? new Date(trip.createdAt).toISOString() : new Date().toISOString(), 
-        // updated_at: new Date().toISOString(),
       };
-    }).filter(trip => trip !== null); // Remove any nulls from invalid trips
+    }).filter(trip => trip !== null); 
 
     if (tripsForDb.length === 0 && tripsToRestore.length > 0) {
         return { success: false, error: "جميع الرحلات في ملف النسخ الاحتياطي كانت غير صالحة للاستعادة." };
@@ -177,7 +145,7 @@ export async function restoreUserTripsAction(fileName: string, fileContent: stri
     console.log(`[Restore Action] Inserting ${tripsForDb.length} trips for user ${user.id}...`);
     const { error: insertError } = await supabase
       .from('trips')
-      .insert(tripsForDb as any[]); // Cast as any if schema mismatch is complex during dev
+      .insert(tripsForDb as any[]); 
 
     if (insertError) {
       console.error("[Restore Action] Error inserting new trips:", insertError.message);
