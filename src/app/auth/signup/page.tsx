@@ -65,7 +65,7 @@ export default function SignupPage() {
       toast({
         title: "تم إنشاء الحساب بنجاح!",
         description: data.user?.identities?.length === 0 // A heuristic: if no identities, likely needs confirmation
-          ? "تم إرسال بريد إلكتروني للتأكيد. يرجى التحقق من بريدك لتفعيل الحساب."
+          ? "تم إرسال رمز OTP لتفعيل حسابك. يرجى التحقق من بريدك الإلكتروني."
           : "مرحباً بك! يتم الآن توجيهك إلى لوحة التحكم.",
       });
       router.push('/dashboard'); 
