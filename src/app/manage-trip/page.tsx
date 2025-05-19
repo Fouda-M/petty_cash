@@ -47,7 +47,6 @@ export default function ManageTripPage() {
   const [isExchangeRateManagerOpen, setIsExchangeRateManagerOpen] = React.useState(false);
   const [isSavingFullTrip, setIsSavingFullTrip] = React.useState(false);
 
-
   React.useEffect(() => {
     const initializePage = async () => {
       console.log("[ManageTripPage Debug] Initializing page...");
@@ -64,11 +63,11 @@ export default function ManageTripPage() {
       console.log("[ManageTripPage Debug] User session found:", session.user.id);
 
       const tripIdToEditParam = searchParams.get('edit');
-      setEditingTripId(tripIdToEditParam); // Keep track of the ID from URL
+      
       console.log("[ManageTripPage Debug] tripIdToEditParam from URL:", tripIdToEditParam);
 
-
       if (tripIdToEditParam) {
+        setEditingTripId(tripIdToEditParam); 
         console.log(`[ManageTripPage Debug] Attempting to load trip for edit from DB. ID: ${tripIdToEditParam}`);
         const { data: tripToLoad, error } = await supabase
           .from('trips')
@@ -80,7 +79,6 @@ export default function ManageTripPage() {
         if (error) {
           console.error("[ManageTripPage Debug] Error fetching trip for edit:", error);
           toast({ variant: "destructive", title: "خطأ في تحميل الرحلة", description: `لم يتم العثور على الرحلة أو حدث خطأ: ${error.message}` });
-          // Proceed as a new trip if loading fails
           setCurrentTripDetails(null);
           setTransactions([]);
           setExchangeRates(DEFAULT_EXCHANGE_RATES_TO_USD);
@@ -88,15 +86,21 @@ export default function ManageTripPage() {
           console.log('[ManageTripPage Debug] Trip found in DB for edit:', tripToLoad);
           const tripData = tripToLoad as any;
 
-          setCurrentTripDetails({
-            ...tripData.details,
-            tripStartDate: new Date(tripData.details.tripStartDate),
-            tripEndDate: new Date(tripData.details.tripEndDate),
-          });
+          const details = tripData.details;
+          if (details && details.tripStartDate && details.tripEndDate) {
+            setCurrentTripDetails({
+              ...details,
+              tripStartDate: new Date(details.tripStartDate),
+              tripEndDate: new Date(details.tripEndDate),
+            });
+          } else {
+            setCurrentTripDetails(null); // Or some default
+          }
+          
 
           const parsedTransactions = (Array.isArray(tripData.transactions) ? tripData.transactions : []).map((t: any) => {
             let type = t.type;
-             if (type === 'CUSTODY_HANDOVER') { // Legacy type correction
+             if (type === 'CUSTODY_HANDOVER') { 
                type = TransactionType.CUSTODY_HANDOVER_OWNER;
              } else if (!Object.values(TransactionType).includes(type as TransactionType)) {
                console.warn(`[ManageTripPage Debug] Invalid transaction type "${t.type}" for tx ID "${t.id}". Defaulting to EXPENSE.`);
@@ -104,7 +108,7 @@ export default function ManageTripPage() {
              }
             return {
               ...t,
-              id: t.id || crypto.randomUUID(), // Ensure ID exists
+              id: t.id || crypto.randomUUID(), 
               date: new Date(t.date),
               type: type as TransactionType,
               amount: Number(t.amount) || 0,
@@ -113,7 +117,7 @@ export default function ManageTripPage() {
           
           console.log('[ManageTripPage Debug] Parsed transactions for edit (count):', parsedTransactions.length, 'IDs:', parsedTransactions.map(pt => pt.id));
           setTransactions(parsedTransactions);
-          setExchangeRates(tripData.exchange_rates || DEFAULT_EXCHANGE_RATES_TO_USD); // Load trip-specific rates or default
+          setExchangeRates(tripData.exchange_rates || DEFAULT_EXCHANGE_RATES_TO_USD); 
           toast({ title: "تم تحميل الرحلة للتعديل", description: `يتم الآن تعديل رحلة: ${tripData.name}` });
         } else {
            console.log('[ManageTripPage Debug] Trip not found in DB for edit, or no data returned.');
@@ -125,6 +129,7 @@ export default function ManageTripPage() {
       } else {
         // No trip ID for editing, start fresh
         console.log('[ManageTripPage Debug] No trip ID for edit, starting fresh.');
+        setEditingTripId(null);
         setCurrentTripDetails(null);
         setTransactions([]);
         setExchangeRates(DEFAULT_EXCHANGE_RATES_TO_USD);
@@ -134,7 +139,7 @@ export default function ManageTripPage() {
     };
 
     initializePage();
-  }, [searchParams, router, toast]); // Only run once on mount and when searchParams/router/toast change (stable)
+  }, [searchParams, router, toast]); 
 
 
   const handleTripDetailsUpdate = (details: TripDetailsFormData) => {
@@ -172,38 +177,64 @@ export default function ManageTripPage() {
 
   const handlePrint = async () => {
     const element = document.querySelector(".print-only");
-    if (element && typeof window !== 'undefined') {
+    if (!element) {
+      toast({ variant: "destructive", title: "خطأ", description: "لم يتم العثور على عنصر التقرير للطباعة." });
+      return;
+    }
+
+    if (!currentTripDetails) {
+      toast({ variant: "destructive", title: "بيانات الرحلة غير متوفرة", description: "يرجى إدخال وتحديث بيانات الرحلة أولاً قبل محاولة الطباعة." });
+      return;
+    }
+    
+    // Also ensure form data is valid if we want to use the absolute latest from the form
+    const latestFormData = await tripDetailsFormRef.current?.validateAndGetData();
+    if (!latestFormData) {
+         toast({ variant: "destructive", title: "بيانات الرحلة غير صالحة", description: "يرجى مراجعة وتصحيح بيانات الرحلة في النموذج." });
+        return;
+    }
+
+
+    if (typeof window !== 'undefined') {
       try {
         const html2pdfModule = await import('html2pdf.js');
         const html2pdf = html2pdfModule.default;
         
-        let detailsForPrint: TripDetailsFormData | null = null;
-        if (tripDetailsFormRef.current) {
-            detailsForPrint = await tripDetailsFormRef.current.validateAndGetData();
-        }
-        if (!detailsForPrint) { // Fallback if form validation itself isn't the source
-            detailsForPrint = currentTripDetails; // Use state if form data not readily available
-        }
+        element.classList.remove('hidden');
+        // Ensure the report uses the latest validated form data for printing
+        // This requires ensuring PrintableReport receives latestFormData
+        // For simplicity, we'll ensure currentTripDetails is updated if user pressed "Update Trip Details"
+        // Or, if the user directly prints, we could temporarily set a state for PrintableReport to use `latestFormData`.
+        // For now, we rely on currentTripDetails, and the user should update it first.
 
-        if (!detailsForPrint) {
-            toast({ variant: "destructive", title: "بيانات الرحلة غير كاملة للطباعة" });
-            return;
-        }
+        await new Promise(resolve => setTimeout(resolve, 200)); // Increased delay
 
         html2pdf()
-          .set({ margin: 0.5, filename: "transactions-report.pdf", image: { type: "jpeg", quality: 0.98 }, html2canvas: { scale: 2, useCORS: true, logging: false }, jsPDF: { unit: "in", format: "a4", orientation: "portrait" }})
+          .set({ 
+            margin: 0.5, 
+            filename: "transactions-report.pdf", 
+            image: { type: "jpeg", quality: 0.98 }, 
+            html2canvas: { scale: 2, useCORS: true, logging: true }, // Enabled logging
+            jsPDF: { unit: "in", format: "a4", orientation: "portrait" }
+          })
           .from(element)
-          .save();
+          .save()
+          .catch((pdfError: any) => {
+            console.error("Error during PDF generation with html2pdf:", pdfError);
+            toast({ variant: "destructive", title: "خطأ في إنشاء PDF", description: pdfError.message || "فشلت عملية إنشاء الملف." });
+          })
+          .finally(() => {
+            element.classList.add('hidden');
+          });
       } catch (error) {
-        console.error("Error generating PDF:", error);
-        toast({ variant: "destructive", title: "خطأ في إنشاء PDF" });
+        console.error("Error in handlePrint function:", error);
+        toast({ variant: "destructive", title: "خطأ في إعداد الطباعة", description: error instanceof Error ? error.message : "حدث خطأ غير متوقع." });
+        element.classList.add('hidden'); // Ensure it's hidden even if import fails
       }
     }
   };
 
   const handleRatesUpdate = (newRates: ExchangeRates) => {
-    // No longer save to localStorage for new trips generally, only with explicit trip save.
-    // However, if a user manually updates rates, we should apply them to the current trip's state.
     setExchangeRates(newRates);
     toast({ title: "تم تحديث أسعار الصرف محليًا لهذه الرحلة" });
   };
@@ -242,10 +273,9 @@ export default function ManageTripPage() {
     const tripDataPayload = {
       user_id: user.id,
       name: tripName,
-      details: validatedTripDetails,
+      details: validatedTripDetails, // Use validated details
       transactions: transactions,
-      exchange_rates: exchangeRates, // Use current state of exchangeRates
-      // updated_at will be handled by DB
+      exchange_rates: exchangeRates, 
     };
 
     try {
@@ -257,7 +287,7 @@ export default function ManageTripPage() {
         console.log(`[ManageTripPage Debug] Updating trip with ID: ${editingTripId}`);
         const { error: updateError } = await supabase
           .from('trips')
-          .update({ ...tripDataPayload, updated_at: new Date().toISOString() }) // Explicitly set updated_at for updates
+          .update({ ...tripDataPayload, updated_at: new Date().toISOString() }) 
           .eq('id', editingTripId)
           .eq('user_id', user.id);
         error = updateError;
@@ -267,13 +297,13 @@ export default function ManageTripPage() {
          console.log("[ManageTripPage Debug] Inserting new trip.");
         const { data: newTrip, error: insertError } = await supabase
           .from('trips')
-          .insert({ ...tripDataPayload, created_at: new Date().toISOString() }) // id auto-generated, created_at set
+          .insert({ ...tripDataPayload, created_at: new Date().toISOString() }) 
           .select()
           .single();
         error = insertError;
         successMessageTitle = "تم حفظ الرحلة بنجاح!";
         successMessageDescription = `تم حفظ رحلة "${tripName}".`;
-         if (newTrip) setEditingTripId(newTrip.id); // If it's a new trip, get its ID for future edits if user stays
+         if (newTrip) setEditingTripId(newTrip.id); 
       }
 
       if (error) {
@@ -285,16 +315,14 @@ export default function ManageTripPage() {
           description: successMessageDescription,
         });
         
-        // Reset component state for a new trip if not redirecting immediately
         setTransactions([]);
-        setCurrentTripDetails(null);
+        setCurrentTripDetails(null); 
         setExchangeRates(DEFAULT_EXCHANGE_RATES_TO_USD);
         setEditingTripId(null); 
         
-        // Reset form by passing null (TripDetailsForm's useEffect will handle it)
-        // tripDetailsFormRef.current?.resetForm(); // Or a method exposed by the form if you add one
+        tripDetailsFormRef.current?.resetForm(); 
 
-        router.push('/saved-trips'); // Redirect after successful save/update
+        router.push('/saved-trips'); 
       }
     } catch (generalError: any) {
       console.error("General error during save/update full trip:", generalError);
@@ -340,7 +368,7 @@ export default function ManageTripPage() {
       
       <TripDetailsForm
         ref={tripDetailsFormRef}
-        onDetailsSubmit={handleTripDetailsUpdate} // This prop might become less critical if main save button pulls directly
+        onDetailsSubmit={handleTripDetailsUpdate} 
         initialData={currentTripDetails}
       />
       
@@ -399,13 +427,10 @@ export default function ManageTripPage() {
         <PrintableReport
             transactions={transactions}
             exchangeRates={exchangeRates}
-            tripDetails={
-                (tripDetailsFormRef.current && tripDetailsFormRef.current.validateAndGetData()
-                    ? (tripDetailsFormRef.current.validateAndGetData() as unknown as TripDetailsFormData) // Cast might be needed depending on exact return
-                    : currentTripDetails) || null // Fallback to state
-            }
+            tripDetails={currentTripDetails}
         />
       </div>
     </div>
   );
 }
+
