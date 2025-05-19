@@ -15,7 +15,7 @@ import { TransactionType, Currency } from "@/types";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Printer, Settings, ArrowRight, Save, ListChecks, Loader2, Edit } from "lucide-react";
-import { DEFAULT_EXCHANGE_RATES_TO_USD } from "@/lib/exchangeRates"; // Corrected: loadExchangeRates removed as it was for localStorage
+import { DEFAULT_EXCHANGE_RATES_TO_USD } from "@/lib/exchangeRates";
 import ExchangeRateManager from "@/components/settings/ExchangeRateManager";
 import Link from "next/link";
 import { supabase } from '@/lib/supabase/client';
@@ -61,7 +61,7 @@ export default function ManageTripPage() {
     setCurrentTripDetails(null);
     setTransactions([]);
     setExchangeRates({ ...DEFAULT_EXCHANGE_RATES_TO_USD });
-    tripDetailsFormRef.current?.resetForm(); // Reset the form to initial state
+    tripDetailsFormRef.current?.resetForm(null); // Reset the form to initial state
     console.log("[ManageTripPage Debug] Initialized as a new trip.");
   }, []);
 
@@ -88,12 +88,6 @@ export default function ManageTripPage() {
 
       const tripIdToEditParam = searchParams.get('edit');
       console.log("[ManageTripPage Debug] tripIdToEditParam from URL:", tripIdToEditParam);
-      
-      // Clear EDITING_TRIP_ID_KEY from localStorage if it exists, as we now use URL params
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem("EDITING_TRIP_ID_KEY"); 
-      }
-
 
       if (tripIdToEditParam) {
         setEditingTripId(tripIdToEditParam);
@@ -109,35 +103,32 @@ export default function ManageTripPage() {
           if (fetchError && isMounted) {
             console.error("[ManageTripPage Debug] Error fetching trip for edit from DB:", fetchError);
             toast({ variant: "destructive", title: "خطأ في تحميل الرحلة", description: `لم يتم العثور على الرحلة أو حدث خطأ: ${fetchError.message}. سيتم بدء رحلة جديدة.` });
-            loadNewTripDefaults(); // Fallback to new trip on fetch error
-            setEditingTripId(null); // Ensure we are not in edit mode if trip load fails
+            loadNewTripDefaults();
+            setEditingTripId(null);
           } else if (tripToLoad && isMounted) {
-            console.log('[ManageTripPage Debug] Trip found in DB for edit:', tripToLoad);
+            console.log('[ManageTripPage Debug] Trip found in DB for edit:', JSON.stringify(tripToLoad, null, 2));
             const tripData = tripToLoad as any;
 
             const details = tripData.details;
             if (details && details.tripStartDate && details.tripEndDate) {
-              setCurrentTripDetails({
+              const loadedTripDetails = {
                 ...details,
                 tripStartDate: new Date(details.tripStartDate),
                 tripEndDate: new Date(details.tripEndDate),
-              });
-               tripDetailsFormRef.current?.resetForm({ // Also reset the form with these details
-                ...details,
-                tripStartDate: new Date(details.tripStartDate),
-                tripEndDate: new Date(details.tripEndDate),
-              });
+              };
+              setCurrentTripDetails(loadedTripDetails);
+               tripDetailsFormRef.current?.resetForm(loadedTripDetails);
             } else {
               setCurrentTripDetails(null);
-              tripDetailsFormRef.current?.resetForm();
+              tripDetailsFormRef.current?.resetForm(null);
             }
             
             const rawTransactions = Array.isArray(tripData.transactions) ? tripData.transactions : [];
-            console.log('[ManageTripPage Debug] Raw transactions from DB for edit (count):', rawTransactions.length, 'Data:', JSON.stringify(rawTransactions.slice(0,2)));
+            console.log('[ManageTripPage Debug] Raw transactions from DB for edit (count):', rawTransactions.length);
             
             const parsedTransactions = rawTransactions.map((t: any) => {
               let type = t.type;
-              if (type === 'CUSTODY_HANDOVER') { // Legacy type handling
+              if (type === 'CUSTODY_HANDOVER') { 
                 type = TransactionType.CUSTODY_HANDOVER_OWNER;
               } else if (!Object.values(TransactionType).includes(type as TransactionType)) {
                 console.warn(`[ManageTripPage Debug] Invalid transaction type "${t.type}" for tx ID "${t.id}". Defaulting to EXPENSE.`);
@@ -146,7 +137,7 @@ export default function ManageTripPage() {
               return {
                 ...t,
                 id: t.id || crypto.randomUUID(),
-                date: new Date(t.date), // Ensure date is a Date object
+                date: new Date(t.date),
                 amount: Number(t.amount) || 0,
                 type: type as TransactionType,
               };
@@ -159,22 +150,22 @@ export default function ManageTripPage() {
           } else if (isMounted) {
             console.log('[ManageTripPage Debug] Trip not found in DB for edit, or no data returned. Initializing as new trip.');
             toast({ variant: "destructive", title: "خطأ", description: "لم يتم العثور على الرحلة المطلوبة للتعديل. سيتم بدء رحلة جديدة." });
-            loadNewTripDefaults(); // Fallback to new trip
-            setEditingTripId(null); // Not in edit mode
+            loadNewTripDefaults();
+            setEditingTripId(null);
           }
         } catch (error: any) {
           console.error("[ManageTripPage Debug] Catch block: Error fetching/processing trip for edit:", error);
           if (isMounted) {
             toast({ variant: "destructive", title: "خطأ في تحميل الرحلة", description: `حدث خطأ: ${error.message}. سيتم بدء رحلة جديدة.` });
-            loadNewTripDefaults(); // Fallback to new trip
-            setEditingTripId(null); // Not in edit mode
+            loadNewTripDefaults();
+            setEditingTripId(null);
           }
         }
       } else {
         console.log('[ManageTripPage Debug] No trip ID for edit in URL params. Starting fresh or loading active.');
         if (isMounted) {
-          setEditingTripId(null); // Not in edit mode
-          loadNewTripDefaults(); // Start with new trip defaults
+          setEditingTripId(null); 
+          loadNewTripDefaults();
         }
       }
       if (isMounted) setIsLoading(false);
@@ -203,7 +194,7 @@ export default function ManageTripPage() {
 
   const handleDeleteTransaction = (id: string) => {
     setTransactions(prev => prev.filter(t => t.id !== id));
-    toast({ title: "تم حذف المعاملة محليًا" });
+    toast({ title: "تم حذف المعاملة" });
   };
 
   const handleOpenEditModal = (transaction: Transaction) => {
@@ -224,70 +215,130 @@ export default function ManageTripPage() {
     handleCloseEditModal();
   };
 
-  const handlePrint = async () => {
-    const latestValidatedDetails = await tripDetailsFormRef.current?.validateAndGetData();
-    if (!latestValidatedDetails) {
-        toast({ variant: "destructive", title: "بيانات الرحلة غير صالحة", description: "يرجى مراجعة وتصحيح بيانات الرحلة في النموذج." });
-        return;
-    }
-    
-    if (transactions.length === 0 && !editingTripId) {
-       toast({ variant: "destructive", title: "لا توجد معاملات", description: "يرجى إضافة معاملة واحدة على الأقل للطباعة." });
-       return;
-    }
-
-    setReportDataForPrint({
-        tripDetails: latestValidatedDetails,
-        transactions: transactions,
-        exchangeRates: exchangeRates
+const handlePrint = async () => {
+  const latestValidatedDetails = await tripDetailsFormRef.current?.validateAndGetData();
+  if (!latestValidatedDetails) {
+    toast({
+      variant: "destructive",
+      title: "بيانات الرحلة غير صالحة",
+      description: "يرجى مراجعة وتصحيح بيانات الرحلة في النموذج.",
     });
+    return;
+  }
 
-    setTimeout(async () => {
-        const element = document.querySelector(".print-only");
-        if (!element) {
-            toast({ variant: "destructive", title: "خطأ", description: "لم يتم العثور على عنصر التقرير للطباعة." });
+  if (transactions.length === 0 && !editingTripId) {
+    toast({
+      variant: "destructive",
+      title: "لا توجد معاملات",
+      description: "يرجى إضافة معاملة واحدة على الأقل للطباعة.",
+    });
+    return;
+  }
+
+  setReportDataForPrint({
+    tripDetails: latestValidatedDetails,
+    transactions: transactions,
+    exchangeRates: exchangeRates,
+  });
+
+  setTimeout(async () => {
+    const element = document.querySelector(".print-only") as HTMLElement | null; // Cast to HTMLElement
+    if (!element) {
+      toast({
+        variant: "destructive",
+        title: "خطأ",
+        description: "لم يتم العثور على عنصر التقرير للطباعة.",
+      });
+      setReportDataForPrint(null);
+      return;
+    }
+
+    // Ensure element is visible for capture
+    const originalStyleDisplay = element.style.display;
+    const originalStylePosition = element.style.position;
+    const originalStyleTop = element.style.top;
+    const originalStyleLeft = element.style.left;
+    
+    element.style.display = 'block';
+    element.style.position = 'absolute'; // Position it to ensure full content is measurable
+    element.style.top = '0';
+    element.style.left = '0';
+    element.classList.remove("hidden");
+
+
+    // Force reflow to ensure styles are applied and dimensions are calculated
+    void element.offsetWidth;
+    await new Promise((resolve) => setTimeout(resolve, 500)); // Increased delay
+
+    if (typeof window !== "undefined") {
+      try {
+        const html2pdfModule = await import("html2pdf.js");
+        const html2pdf = html2pdfModule.default;
+
+        const fileName = `report-${latestValidatedDetails.driverName.replace(
+          /\s+/g,
+          "_"
+        )}-${new Date().toISOString().split("T")[0]}.pdf`;
+
+        html2pdf()
+          .set({
+            margin: 0.5,
+            filename: fileName,
+            image: { type: "jpeg", quality: 0.98 },
+            html2canvas: {
+              scale: 2,
+              useCORS: true,
+              logging: true, // Enable logging for html2canvas
+              letterRendering: true,
+              scrollX: 0, // Try to capture from the top-left
+              scrollY: 0,
+              windowWidth: element.scrollWidth, // Capture full width of the element
+              windowHeight: element.scrollHeight, // Capture full height of the element
+            },
+            jsPDF: { unit: "in", format: "a4", orientation: "portrait" },
+          })
+          .from(element)
+          .save()
+          .catch((pdfError: any) => {
+            console.error("Error during PDF generation with html2pdf:", pdfError);
+            toast({
+              variant: "destructive",
+              title: "خطأ في إنشاء PDF",
+              description: pdfError.message || "فشلت عملية إنشاء الملف.",
+            });
+          })
+          .finally(() => {
+            // Restore original styles and hide element
+            element.style.display = originalStyleDisplay;
+            element.style.position = originalStylePosition;
+            element.style.top = originalStyleTop;
+            element.style.left = originalStyleLeft;
+            if (!originalStyleDisplay) element.classList.add("hidden"); // Add hidden back if it was originally meant to be
+
             setReportDataForPrint(null);
-            return;
+          });
+      } catch (error) {
+        console.error("Error in handlePrint function:", error);
+        toast({
+          variant: "destructive",
+          title: "خطأ في إعداد الطباعة",
+          description:
+            error instanceof Error ? error.message : "حدث خطأ غير متوقع.",
+        });
+        // Restore original styles and hide element on error too
+        if (element) {
+            element.style.display = originalStyleDisplay;
+            element.style.position = originalStylePosition;
+            element.style.top = originalStyleTop;
+            element.style.left = originalStyleLeft;
+            if (!originalStyleDisplay) element.classList.add("hidden");
         }
-
-        // @ts-ignore
-        void element.offsetWidth; // Force reflow
-
-        if (typeof window !== 'undefined') {
-            try {
-                const html2pdfModule = await import('html2pdf.js');
-                const html2pdf = html2pdfModule.default;
-                
-                await new Promise(resolve => setTimeout(resolve, 300)); // Increased delay for rendering
-
-                const fileName = `report-${latestValidatedDetails.driverName.replace(/\s+/g, '_')}-${new Date().toISOString().split('T')[0]}.pdf`;
-
-                html2pdf()
-                    .set({
-                        margin: 0.5,
-                        filename: fileName,
-                        image: { type: "jpeg", quality: 0.98 },
-                        html2canvas: { scale: 2, useCORS: true, logging: true, letterRendering: true }, // Enabled logging
-                        jsPDF: { unit: "in", format: "a4", orientation: "portrait" }
-                    })
-                    .from(element)
-                    .save()
-                    .catch((pdfError: any) => {
-                        console.error("Error during PDF generation with html2pdf:", pdfError);
-                        toast({ variant: "destructive", title: "خطأ في إنشاء PDF", description: pdfError.message || "فشلت عملية إنشاء الملف." });
-                    })
-                    .finally(() => {
-                        setReportDataForPrint(null);
-                    });
-            } catch (error) {
-                console.error("Error in handlePrint function:", error);
-                toast({ variant: "destructive", title: "خطأ في إعداد الطباعة", description: error instanceof Error ? error.message : "حدث خطأ غير متوقع." });
-                setReportDataForPrint(null);
-            }
-        } else {
-            setReportDataForPrint(null);
-        }
-    }, 300); // Increased timeout
+        setReportDataForPrint(null);
+      }
+    } else {
+      setReportDataForPrint(null);
+    }
+  }, 500); // Main timeout for React to re-render
 };
 
 
@@ -315,7 +366,6 @@ export default function ManageTripPage() {
       return;
     }
     
-    // For new trips (not editing), ensure there's at least one transaction
     if (!editingTripId && transactions.length === 0) {
       toast({
         variant: "destructive",
@@ -379,8 +429,8 @@ export default function ManageTripPage() {
           description: successMessageDescription,
         });
         
-        loadNewTripDefaults(); // Reset form state for a potential new trip entry
-        setEditingTripId(null); // Clear editing state
+        loadNewTripDefaults(); 
+        setEditingTripId(null); 
         
         router.push('/saved-trips'); 
       }
@@ -488,7 +538,6 @@ export default function ManageTripPage() {
         onRatesUpdate={handleRatesUpdate}
       />
 
-      {/* Conditionally render PrintableReport and control visibility */}
       <div className={cn("print-only", !reportDataForPrint && "hidden")}>
         {reportDataForPrint && (
             <PrintableReport
@@ -501,3 +550,5 @@ export default function ManageTripPage() {
     </div>
   );
 }
+
+    
