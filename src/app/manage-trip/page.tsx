@@ -1,7 +1,7 @@
 
 "use client";
 
-import *a_s React from "react";
+import * as React from "react";
 import { useRouter, useSearchParams } from 'next/navigation';
 import { format } from 'date-fns';
 import AddTransactionForm from "@/components/transactions/AddTransactionForm";
@@ -38,7 +38,7 @@ export default function ManageTripPage() {
   const [user, setUser] = React.useState<User | null>(null);
   const [transactions, setTransactions] = React.useState<Transaction[]>([]);
   const [currentTripDetails, setCurrentTripDetails] = React.useState<TripDetailsFormData | null>(null);
-  const [exchangeRates, setExchangeRates] = React.useState<ExchangeRates>(() => loadExchangeRates()); // Still load from localStorage initially for new trips
+  const [exchangeRates, setExchangeRates] = React.useState<ExchangeRates>(() => DEFAULT_EXCHANGE_RATES_TO_USD);
   const [editingTripId, setEditingTripId] = React.useState<string | null>(null);
 
   const [isLoading, setIsLoading] = React.useState(true);
@@ -47,40 +47,47 @@ export default function ManageTripPage() {
   const [isExchangeRateManagerOpen, setIsExchangeRateManagerOpen] = React.useState(false);
   const [isSavingFullTrip, setIsSavingFullTrip] = React.useState(false);
 
+
   React.useEffect(() => {
     const initializePage = async () => {
+      console.log("[ManageTripPage Debug] Initializing page...");
       setIsLoading(true);
+
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) {
         toast({ title: "غير مصرح به", description: "يرجى تسجيل الدخول للمتابعة.", variant: "destructive" });
         router.push('/');
+        setIsLoading(false);
         return;
       }
       setUser(session.user);
+      console.log("[ManageTripPage Debug] User session found:", session.user.id);
 
-      const tripIdToEdit = searchParams.get('edit');
-      setEditingTripId(tripIdToEdit);
+      const tripIdToEditParam = searchParams.get('edit');
+      setEditingTripId(tripIdToEditParam); // Keep track of the ID from URL
+      console.log("[ManageTripPage Debug] tripIdToEditParam from URL:", tripIdToEditParam);
 
-      if (tripIdToEdit) {
-        console.log(`[ManageTripPage Debug] Attempting to load trip for edit from DB. ID: ${tripIdToEdit}`);
+
+      if (tripIdToEditParam) {
+        console.log(`[ManageTripPage Debug] Attempting to load trip for edit from DB. ID: ${tripIdToEditParam}`);
         const { data: tripToLoad, error } = await supabase
           .from('trips')
           .select('*')
-          .eq('id', tripIdToEdit)
+          .eq('id', tripIdToEditParam)
           .eq('user_id', session.user.id)
           .single();
 
         if (error) {
           console.error("[ManageTripPage Debug] Error fetching trip for edit:", error);
-          toast({ variant: "destructive", title: "خطأ في تحميل الرحلة", description: error.message });
+          toast({ variant: "destructive", title: "خطأ في تحميل الرحلة", description: `لم يتم العثور على الرحلة أو حدث خطأ: ${error.message}` });
           // Proceed as a new trip if loading fails
           setCurrentTripDetails(null);
           setTransactions([]);
-          setExchangeRates(loadExchangeRates()); // Load defaults for new trip
+          setExchangeRates(DEFAULT_EXCHANGE_RATES_TO_USD);
         } else if (tripToLoad) {
           console.log('[ManageTripPage Debug] Trip found in DB for edit:', tripToLoad);
-          const tripData = tripToLoad as any; // Cast to any to access dynamic keys, or define a proper type
-          
+          const tripData = tripToLoad as any;
+
           setCurrentTripDetails({
             ...tripData.details,
             tripStartDate: new Date(tripData.details.tripStartDate),
@@ -89,42 +96,45 @@ export default function ManageTripPage() {
 
           const parsedTransactions = (Array.isArray(tripData.transactions) ? tripData.transactions : []).map((t: any) => {
             let type = t.type;
-            if (type === 'CUSTODY_HANDOVER') {
-              type = TransactionType.CUSTODY_HANDOVER_OWNER;
-            } else if (!Object.values(TransactionType).includes(type as TransactionType)) {
-              type = TransactionType.EXPENSE;
-            }
+             if (type === 'CUSTODY_HANDOVER') { // Legacy type correction
+               type = TransactionType.CUSTODY_HANDOVER_OWNER;
+             } else if (!Object.values(TransactionType).includes(type as TransactionType)) {
+               console.warn(`[ManageTripPage Debug] Invalid transaction type "${t.type}" for tx ID "${t.id}". Defaulting to EXPENSE.`);
+               type = TransactionType.EXPENSE;
+             }
             return {
               ...t,
-              id: t.id || crypto.randomUUID(),
+              id: t.id || crypto.randomUUID(), // Ensure ID exists
               date: new Date(t.date),
               type: type as TransactionType,
               amount: Number(t.amount) || 0,
             };
           }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
           
-          console.log('[ManageTripPage Debug] Parsed transactions for edit (count):', parsedTransactions.length);
+          console.log('[ManageTripPage Debug] Parsed transactions for edit (count):', parsedTransactions.length, 'IDs:', parsedTransactions.map(pt => pt.id));
           setTransactions(parsedTransactions);
-          setExchangeRates(tripData.exchange_rates || loadExchangeRates()); // Load trip-specific rates or default
+          setExchangeRates(tripData.exchange_rates || DEFAULT_EXCHANGE_RATES_TO_USD); // Load trip-specific rates or default
           toast({ title: "تم تحميل الرحلة للتعديل", description: `يتم الآن تعديل رحلة: ${tripData.name}` });
         } else {
+           console.log('[ManageTripPage Debug] Trip not found in DB for edit, or no data returned.');
            toast({ variant: "destructive", title: "خطأ", description: "لم يتم العثور على الرحلة المطلوبة للتعديل." });
            setCurrentTripDetails(null);
            setTransactions([]);
-           setExchangeRates(loadExchangeRates());
+           setExchangeRates(DEFAULT_EXCHANGE_RATES_TO_USD);
         }
       } else {
-        // No trip ID for editing, start fresh or load from localStorage if we reinstate that for drafts
+        // No trip ID for editing, start fresh
         console.log('[ManageTripPage Debug] No trip ID for edit, starting fresh.');
         setCurrentTripDetails(null);
         setTransactions([]);
-        setExchangeRates(loadExchangeRates()); // Load default/localStorage rates for a new trip
+        setExchangeRates(DEFAULT_EXCHANGE_RATES_TO_USD);
       }
       setIsLoading(false);
+      console.log("[ManageTripPage Debug] Page initialization complete.");
     };
 
     initializePage();
-  }, [searchParams, router, toast]);
+  }, [searchParams, router, toast]); // Only run once on mount and when searchParams/router/toast change (stable)
 
 
   const handleTripDetailsUpdate = (details: TripDetailsFormData) => {
@@ -171,8 +181,8 @@ export default function ManageTripPage() {
         if (tripDetailsFormRef.current) {
             detailsForPrint = await tripDetailsFormRef.current.validateAndGetData();
         }
-        if (!detailsForPrint) {
-            detailsForPrint = currentTripDetails;
+        if (!detailsForPrint) { // Fallback if form validation itself isn't the source
+            detailsForPrint = currentTripDetails; // Use state if form data not readily available
         }
 
         if (!detailsForPrint) {
@@ -192,9 +202,10 @@ export default function ManageTripPage() {
   };
 
   const handleRatesUpdate = (newRates: ExchangeRates) => {
-    saveExchangeRatesToLocalStorage(newRates); // Save to localStorage for new trips, or until explicitly saved with trip
+    // No longer save to localStorage for new trips generally, only with explicit trip save.
+    // However, if a user manually updates rates, we should apply them to the current trip's state.
     setExchangeRates(newRates);
-    toast({ title: "تم تحديث أسعار الصرف محليًا" });
+    toast({ title: "تم تحديث أسعار الصرف محليًا لهذه الرحلة" });
   };
 
   const handleSaveFullTrip = async () => {
@@ -233,8 +244,8 @@ export default function ManageTripPage() {
       name: tripName,
       details: validatedTripDetails,
       transactions: transactions,
-      exchange_rates: exchangeRates,
-      updated_at: new Date().toISOString(), // Supabase will handle created_at for new, and trigger for updated_at if setup
+      exchange_rates: exchangeRates, // Use current state of exchangeRates
+      // updated_at will be handled by DB
     };
 
     try {
@@ -243,24 +254,26 @@ export default function ManageTripPage() {
       let successMessageDescription = "";
 
       if (editingTripId) {
+        console.log(`[ManageTripPage Debug] Updating trip with ID: ${editingTripId}`);
         const { error: updateError } = await supabase
           .from('trips')
-          .update(tripDataPayload)
+          .update({ ...tripDataPayload, updated_at: new Date().toISOString() }) // Explicitly set updated_at for updates
           .eq('id', editingTripId)
           .eq('user_id', user.id);
         error = updateError;
         successMessageTitle = "تم تحديث الرحلة بنجاح!";
         successMessageDescription = `تم تحديث رحلة "${tripName}".`;
       } else {
-         // For new trips, we might want to include created_at explicitly if not handled by DB default effectively
+         console.log("[ManageTripPage Debug] Inserting new trip.");
         const { data: newTrip, error: insertError } = await supabase
           .from('trips')
-          .insert({ ...tripDataPayload, created_at: new Date().toISOString() }) // id will be auto-generated by DB
+          .insert({ ...tripDataPayload, created_at: new Date().toISOString() }) // id auto-generated, created_at set
           .select()
           .single();
         error = insertError;
         successMessageTitle = "تم حفظ الرحلة بنجاح!";
         successMessageDescription = `تم حفظ رحلة "${tripName}".`;
+         if (newTrip) setEditingTripId(newTrip.id); // If it's a new trip, get its ID for future edits if user stays
       }
 
       if (error) {
@@ -272,16 +285,16 @@ export default function ManageTripPage() {
           description: successMessageDescription,
         });
         
-        // Reset component state for a new trip
+        // Reset component state for a new trip if not redirecting immediately
         setTransactions([]);
         setCurrentTripDetails(null);
-        setExchangeRates(loadExchangeRates()); // Load defaults/localStorage for next new trip
+        setExchangeRates(DEFAULT_EXCHANGE_RATES_TO_USD);
         setEditingTripId(null); 
         
-        if (tripDetailsFormRef.current) {
-          // Reset form by passing null, TripDetailsForm useEffect will handle it
-        }
-        router.push('/saved-trips');
+        // Reset form by passing null (TripDetailsForm's useEffect will handle it)
+        // tripDetailsFormRef.current?.resetForm(); // Or a method exposed by the form if you add one
+
+        router.push('/saved-trips'); // Redirect after successful save/update
       }
     } catch (generalError: any) {
       console.error("General error during save/update full trip:", generalError);
@@ -327,7 +340,7 @@ export default function ManageTripPage() {
       
       <TripDetailsForm
         ref={tripDetailsFormRef}
-        onDetailsSubmit={handleTripDetailsUpdate}
+        onDetailsSubmit={handleTripDetailsUpdate} // This prop might become less critical if main save button pulls directly
         initialData={currentTripDetails}
       />
       
@@ -388,8 +401,8 @@ export default function ManageTripPage() {
             exchangeRates={exchangeRates}
             tripDetails={
                 (tripDetailsFormRef.current && tripDetailsFormRef.current.validateAndGetData()
-                    ? (tripDetailsFormRef.current.validateAndGetData() as unknown as TripDetailsFormData)
-                    : currentTripDetails) || null
+                    ? (tripDetailsFormRef.current.validateAndGetData() as unknown as TripDetailsFormData) // Cast might be needed depending on exact return
+                    : currentTripDetails) || null // Fallback to state
             }
         />
       </div>
