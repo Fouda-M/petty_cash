@@ -15,25 +15,18 @@ async function getSupabaseClientForUser() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
-      global: {
-        headers: {
-          // Pass cookie to Supabase to authenticate the request as the user
-          // This relies on Supabase Auth Helpers for Next.js or manual cookie handling
-        },
-      },
        auth: {
-        // autoRefreshToken: true, // Manage token refresh
-        // persistSession: false, // Sessions are typically managed by cookies in SSR/server actions
-        // detectSessionInUrl: false,
+        autoRefreshToken: false, 
+        persistSession: false, 
+        detectSessionInUrl: false,
       },
     }
   );
 
   // This part is crucial and might need adjustment based on how Supabase Auth Helpers for Next.js are set up.
   // We need to ensure the client is acting as the authenticated user.
-  // The most robust way is usually via `createRouteHandlerClient` or `createServerComponentClient` from `@supabase/auth-helpers-nextjs`.
+  // The most robust way is usually via `createRouteHandlerClient` or `createServerComponentClient` from `@supabase/auth-helpers-nextjs` or `@supabase/ssr`.
   // Since this is a simple server action, we might need to manually manage session.
-  // For now, let's assume direct getUser() might work if cookies are correctly forwarded or helpers are used.
   
   const { data: { user } , error: userError } = await supabase.auth.getUser();
 
@@ -199,5 +192,3 @@ export async function restoreUserTripsAction(fileName: string, fileContent: stri
     return { success: false, error: `خطأ عام أثناء عملية الاستعادة: ${e.message}` };
   }
 }
-
-    
