@@ -61,25 +61,23 @@ export default function ManageTripPage() {
     setCurrentTripDetails(null);
     setTransactions([]);
     setExchangeRates({ ...DEFAULT_EXCHANGE_RATES_TO_USD });
-    tripDetailsFormRef.current?.resetForm(null); // Reset the form to initial state
+    tripDetailsFormRef.current?.resetForm(null); 
     console.log("[ManageTripPage Debug] Initialized as a new trip.");
   }, []);
 
 
   React.useEffect(() => {
-    console.log("[ManageTripPage Debug] Main useEffect triggered for data loading.");
+    console.log("[ManageTripPage Debug] Main data loading useEffect triggered.");
     setIsLoading(true);
     let isMounted = true;
-
+    
     const initializePage = async () => {
       console.log("[ManageTripPage Debug] Initializing page...");
-
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError || !session?.user) {
+      if (!session?.user) {
         if (isMounted) {
           toast({ title: "غير مصرح به", description: "يرجى تسجيل الدخول للمتابعة.", variant: "destructive" });
           router.push('/');
-          setIsLoading(false);
         }
         return;
       }
@@ -88,10 +86,10 @@ export default function ManageTripPage() {
 
       const tripIdToEditParam = searchParams.get('edit');
       console.log("[ManageTripPage Debug] tripIdToEditParam from URL:", tripIdToEditParam);
-
+      
       if (tripIdToEditParam) {
         setEditingTripId(tripIdToEditParam);
-        console.log(`[ManageTripPage Debug] Attempting to load trip for edit from DB. ID: ${tripIdToEditParam}`);
+        console.log(`[ManageTripPage Debug] Attempting to load trip ID: ${tripIdToEditParam} for edit from DB.`);
         try {
           const { data: tripToLoad, error: fetchError } = await supabase
             .from('trips')
@@ -111,20 +109,21 @@ export default function ManageTripPage() {
 
             const details = tripData.details;
             if (details && details.tripStartDate && details.tripEndDate) {
-              const loadedTripDetails = {
+              const loadedTripDetails: TripDetailsFormData = {
                 ...details,
                 tripStartDate: new Date(details.tripStartDate),
                 tripEndDate: new Date(details.tripEndDate),
               };
               setCurrentTripDetails(loadedTripDetails);
-               tripDetailsFormRef.current?.resetForm(loadedTripDetails);
+              tripDetailsFormRef.current?.resetForm(loadedTripDetails);
             } else {
+              console.warn("[ManageTripPage Debug] Trip details from DB missing or dates invalid for edit. Resetting details form.");
               setCurrentTripDetails(null);
               tripDetailsFormRef.current?.resetForm(null);
             }
             
             const rawTransactions = Array.isArray(tripData.transactions) ? tripData.transactions : [];
-            console.log('[ManageTripPage Debug] Raw transactions from DB for edit (count):', rawTransactions.length);
+            console.log('[ManageTripPage Debug] Raw transactions from DB for edit (count):', rawTransactions.length, 'First 5 IDs:', rawTransactions.slice(0,5).map((t:any) => t.id));
             
             const parsedTransactions = rawTransactions.map((t: any) => {
               let type = t.type;
@@ -143,10 +142,10 @@ export default function ManageTripPage() {
               };
             }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
             
-            console.log('[ManageTripPage Debug] Parsed transactions for edit (count):', parsedTransactions.length, 'IDs:', parsedTransactions.map(pt => pt.id).slice(0,5));
+            console.log('[ManageTripPage Debug] Parsed transactions for edit (count):', parsedTransactions.length, 'First 5 IDs:', parsedTransactions.map(pt => pt.id).slice(0,5));
             setTransactions(parsedTransactions);
             setExchangeRates(tripData.exchange_rates || { ...DEFAULT_EXCHANGE_RATES_TO_USD });
-            toast({ title: "تم تحميل الرحلة للتعديل", description: `يتم الآن تعديل رحلة: ${tripData.name}` });
+            toast({ title: "تم تحميل الرحلة للتعديل", description: `يتم الآن تعديل رحلة: ${tripData.name || 'غير مسماة'}` });
           } else if (isMounted) {
             console.log('[ManageTripPage Debug] Trip not found in DB for edit, or no data returned. Initializing as new trip.');
             toast({ variant: "destructive", title: "خطأ", description: "لم يتم العثور على الرحلة المطلوبة للتعديل. سيتم بدء رحلة جديدة." });
@@ -162,10 +161,10 @@ export default function ManageTripPage() {
           }
         }
       } else {
-        console.log('[ManageTripPage Debug] No trip ID for edit in URL params. Starting fresh or loading active.');
+        console.log('[ManageTripPage Debug] No trip ID for edit in URL params. Initializing as new trip.');
         if (isMounted) {
-          setEditingTripId(null); 
           loadNewTripDefaults();
+          setEditingTripId(null); 
         }
       }
       if (isMounted) setIsLoading(false);
@@ -178,7 +177,8 @@ export default function ManageTripPage() {
       isMounted = false;
       console.log("[ManageTripPage Debug] Component unmounted or main effect re-ran.");
     };
-  }, [searchParams, router, toast, loadNewTripDefaults]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, router, toast, loadNewTripDefaults]); 
 
 
   const handleTripDetailsUpdate = (details: TripDetailsFormData) => {
@@ -215,132 +215,42 @@ export default function ManageTripPage() {
     handleCloseEditModal();
   };
 
-const handlePrint = async () => {
-  const latestValidatedDetails = await tripDetailsFormRef.current?.validateAndGetData();
-  if (!latestValidatedDetails) {
-    toast({
-      variant: "destructive",
-      title: "بيانات الرحلة غير صالحة",
-      description: "يرجى مراجعة وتصحيح بيانات الرحلة في النموذج.",
-    });
-    return;
-  }
-
-  if (transactions.length === 0 && !editingTripId) {
-    toast({
-      variant: "destructive",
-      title: "لا توجد معاملات",
-      description: "يرجى إضافة معاملة واحدة على الأقل للطباعة.",
-    });
-    return;
-  }
-
-  setReportDataForPrint({
-    tripDetails: latestValidatedDetails,
-    transactions: transactions,
-    exchangeRates: exchangeRates,
-  });
-
-  setTimeout(async () => {
-    const element = document.querySelector(".print-only") as HTMLElement | null; // Cast to HTMLElement
-    if (!element) {
+  const handlePrint = async () => {
+    const latestValidatedDetails = await tripDetailsFormRef.current?.validateAndGetData();
+    if (!latestValidatedDetails) {
       toast({
         variant: "destructive",
-        title: "خطأ",
-        description: "لم يتم العثور على عنصر التقرير للطباعة.",
+        title: "بيانات الرحلة غير صالحة",
+        description: "يرجى مراجعة وتصحيح بيانات الرحلة في النموذج.",
       });
-      setReportDataForPrint(null);
       return;
     }
-
-    // Ensure element is visible for capture
-    const originalStyleDisplay = element.style.display;
-    const originalStylePosition = element.style.position;
-    const originalStyleTop = element.style.top;
-    const originalStyleLeft = element.style.left;
-    
-    element.style.display = 'block';
-    element.style.position = 'absolute'; // Position it to ensure full content is measurable
-    element.style.top = '0';
-    element.style.left = '0';
-    element.classList.remove("hidden");
-
-
-    // Force reflow to ensure styles are applied and dimensions are calculated
-    void element.offsetWidth;
-    await new Promise((resolve) => setTimeout(resolve, 500)); // Increased delay
-
-    if (typeof window !== "undefined") {
-      try {
-        const html2pdfModule = await import("html2pdf.js");
-        const html2pdf = html2pdfModule.default;
-
-        const fileName = `report-${latestValidatedDetails.driverName.replace(
-          /\s+/g,
-          "_"
-        )}-${new Date().toISOString().split("T")[0]}.pdf`;
-
-        html2pdf()
-          .set({
-            margin: 0.5,
-            filename: fileName,
-            image: { type: "jpeg", quality: 0.98 },
-            html2canvas: {
-              scale: 2,
-              useCORS: true,
-              logging: true, // Enable logging for html2canvas
-              letterRendering: true,
-              scrollX: 0, // Try to capture from the top-left
-              scrollY: 0,
-              windowWidth: element.scrollWidth, // Capture full width of the element
-              windowHeight: element.scrollHeight, // Capture full height of the element
-            },
-            jsPDF: { unit: "in", format: "a4", orientation: "portrait" },
-          })
-          .from(element)
-          .save()
-          .catch((pdfError: any) => {
-            console.error("Error during PDF generation with html2pdf:", pdfError);
-            toast({
-              variant: "destructive",
-              title: "خطأ في إنشاء PDF",
-              description: pdfError.message || "فشلت عملية إنشاء الملف.",
-            });
-          })
-          .finally(() => {
-            // Restore original styles and hide element
-            element.style.display = originalStyleDisplay;
-            element.style.position = originalStylePosition;
-            element.style.top = originalStyleTop;
-            element.style.left = originalStyleLeft;
-            if (!originalStyleDisplay) element.classList.add("hidden"); // Add hidden back if it was originally meant to be
-
-            setReportDataForPrint(null);
-          });
-      } catch (error) {
-        console.error("Error in handlePrint function:", error);
-        toast({
-          variant: "destructive",
-          title: "خطأ في إعداد الطباعة",
-          description:
-            error instanceof Error ? error.message : "حدث خطأ غير متوقع.",
-        });
-        // Restore original styles and hide element on error too
-        if (element) {
-            element.style.display = originalStyleDisplay;
-            element.style.position = originalStylePosition;
-            element.style.top = originalStyleTop;
-            element.style.left = originalStyleLeft;
-            if (!originalStyleDisplay) element.classList.add("hidden");
-        }
-        setReportDataForPrint(null);
-      }
-    } else {
-      setReportDataForPrint(null);
+  
+    if (transactions.length === 0 && !editingTripId) { 
+      toast({
+        variant: "destructive",
+        title: "لا توجد معاملات",
+        description: "يرجى إضافة معاملة واحدة على الأقل للطباعة.",
+      });
+      return;
     }
-  }, 500); // Main timeout for React to re-render
-};
-
+  
+    setReportDataForPrint({
+      tripDetails: latestValidatedDetails,
+      transactions: transactions,
+      exchangeRates: exchangeRates,
+    });
+  
+    setTimeout(() => {
+      if (typeof window !== "undefined") {
+        window.print();
+      }
+      setTimeout(() => {
+        setReportDataForPrint(null);
+      }, 1000); 
+    }, 100); 
+  };
+  
 
   const handleRatesUpdate = (newRates: ExchangeRates) => {
     setExchangeRates(newRates);
@@ -378,18 +288,23 @@ const handlePrint = async () => {
 
     const tripName = `${validatedTripDetails.driverName} - ${validatedTripDetails.cityName || validatedTripDetails.countryName} - ${format(validatedTripDetails.tripStartDate, 'dd/MM/yyyy')}`;
     
+    const detailsForDb = {
+      ...validatedTripDetails,
+      tripStartDate: validatedTripDetails.tripStartDate instanceof Date ? validatedTripDetails.tripStartDate.toISOString() : new Date(validatedTripDetails.tripStartDate).toISOString(),
+      tripEndDate: validatedTripDetails.tripEndDate instanceof Date ? validatedTripDetails.tripEndDate.toISOString() : new Date(validatedTripDetails.tripEndDate).toISOString(),
+    };
+
+    const transactionsForDb = transactions.map(t => ({ 
+      ...t,
+      date: t.date instanceof Date ? t.date.toISOString() : new Date(t.date).toISOString(),
+    }));
+
+
     const tripDataPayload = {
       user_id: user.id,
       name: tripName,
-      details: { 
-        ...validatedTripDetails,
-        tripStartDate: validatedTripDetails.tripStartDate.toISOString(),
-        tripEndDate: validatedTripDetails.tripEndDate.toISOString(),
-      },
-      transactions: transactions.map(t => ({ 
-        ...t,
-        date: new Date(t.date).toISOString(),
-      })),
+      details: detailsForDb,
+      transactions: transactionsForDb,
       exchange_rates: exchangeRates, 
     };
 
@@ -399,7 +314,7 @@ const handlePrint = async () => {
       let successMessageDescription = "";
 
       if (editingTripId) {
-        console.log(`[ManageTripPage Debug] Updating trip with ID: ${editingTripId} in DB with payload:`, tripDataPayload);
+        console.log(`[ManageTripPage Debug] Updating trip with ID: ${editingTripId} in DB with payload:`, JSON.stringify(tripDataPayload, null, 2));
         const { error: updateError } = await supabase
           .from('trips')
           .update({ ...tripDataPayload, updated_at: new Date().toISOString() }) 
@@ -409,7 +324,7 @@ const handlePrint = async () => {
         successMessageTitle = "تم تحديث الرحلة بنجاح!";
         successMessageDescription = `تم تحديث رحلة "${tripName}".`;
       } else {
-         console.log("[ManageTripPage Debug] Inserting new trip into DB with payload:", tripDataPayload);
+         console.log("[ManageTripPage Debug] Inserting new trip into DB with payload:", JSON.stringify(tripDataPayload, null, 2));
         const { data: newTrip, error: insertError } = await supabase
           .from('trips')
           .insert({ ...tripDataPayload, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }) 
@@ -432,7 +347,10 @@ const handlePrint = async () => {
         loadNewTripDefaults(); 
         setEditingTripId(null); 
         
-        router.push('/saved-trips'); 
+        const currentPath = router.toString().split('?')[0]; 
+        router.push(currentPath || '/manage-trip'); 
+        // After saving, redirect to saved-trips page
+        router.push('/saved-trips');
       }
     } catch (generalError: any) {
       console.error("General error during save/update full trip:", generalError);
@@ -550,5 +468,3 @@ const handlePrint = async () => {
     </div>
   );
 }
-
-    
