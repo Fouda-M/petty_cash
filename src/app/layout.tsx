@@ -13,7 +13,7 @@ import { supabase } from '@/lib/supabase/client';
 import type { User } from '@supabase/supabase-js';
 import { Button } from '@/components/ui/button';
 import { useRouter } from 'next/navigation';
-import { LogOut, UserCircle2, UserX2 } from 'lucide-react'; // Added UserX2 for Guest
+import { LogOut, UserCircle2, UserX2 } from 'lucide-react';
 
 const geistSans = GeistSans;
 
@@ -32,15 +32,14 @@ export default function RootLayout({
     const guestStatus = sessionStorage.getItem('isGuest') === 'true';
     setIsGuest(guestStatus);
 
-    const { data: authListener } = supabase.auth.onAuthStateChange(
+    const { data: authListenerData } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         const supaUser = session?.user ?? null;
         setUser(supaUser);
-        if (supaUser) { // If user logs in, they are no longer a guest
+        if (supaUser) { 
             sessionStorage.removeItem('isGuest');
             setIsGuest(false);
         } else {
-            // If no Supabase user, check session storage again in case it was set by guest login
             const currentGuestStatus = sessionStorage.getItem('isGuest') === 'true';
             setIsGuest(currentGuestStatus);
         }
@@ -65,7 +64,7 @@ export default function RootLayout({
     getInitialSession();
 
     return () => {
-      authListener?.unsubscribe();
+      authListenerData?.subscription?.unsubscribe();
     };
   }, []);
 
@@ -76,7 +75,6 @@ export default function RootLayout({
     if (error) {
       console.error("Error logging out:", error);
     }
-    // setUser(null) and router.push('/') will be handled by onAuthStateChange
     router.push('/'); 
   };
 
@@ -140,7 +138,12 @@ export default function RootLayout({
             </div>
           </header>
           <main className="flex-1">
-            {React.cloneElement(children as React.ReactElement, { isGuest })}
+            {React.Children.map(children, child => {
+                if (React.isValidElement(child)) {
+                    return React.cloneElement(child as React.ReactElement<any>, { isGuest });
+                }
+                return child;
+            })}
           </main>
           <footer className="py-6 md:px-8 md:py-0 border-t no-print">
             <div className="container flex flex-col items-center justify-center gap-4 md:h-24 md:flex-row">

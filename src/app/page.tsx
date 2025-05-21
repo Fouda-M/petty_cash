@@ -18,13 +18,14 @@ export default function LoginPage() {
   const { toast } = useToast();
   const router = useRouter();
   const [isLoading, setIsLoading] = React.useState(false);
-  const [isAuthLoading, setIsAuthLoading] = React.useState(true); // New state for auth check
+  const [isAuthLoading, setIsAuthLoading] = React.useState(true);
 
   React.useEffect(() => {
+    setIsAuthLoading(true);
     const checkUserSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
-        router.replace('/dashboard'); // Use replace to avoid login page in history
+        router.replace('/dashboard'); 
       } else {
         setIsAuthLoading(false);
       }
@@ -32,16 +33,16 @@ export default function LoginPage() {
 
     checkUserSession();
 
-    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: authListenerData } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN') {
         router.replace('/dashboard');
       } else if (event === 'SIGNED_OUT') {
-        setIsAuthLoading(false); // Allow login form to show
+        setIsAuthLoading(false); 
       }
     });
 
     return () => {
-      authListener?.unsubscribe();
+      authListenerData?.subscription?.unsubscribe();
     };
   }, [router]);
 
@@ -77,11 +78,9 @@ export default function LoginPage() {
           title: "تم تسجيل الدخول بنجاح!",
           description: "أهلاً بعودتك! يتم الآن توجيهك إلى لوحة التحكم.",
         });
-        sessionStorage.removeItem('isGuest'); // Clear guest flag on successful login
+        sessionStorage.removeItem('isGuest'); 
         // onAuthStateChange will handle redirect
       } else {
-        // This case should ideally not be reached if signInWithPassword succeeds.
-        // If it does, it implies an unexpected state from Supabase.
         throw new Error("فشل تسجيل الدخول. لم يتم إرجاع بيانات المستخدم أو الجلسة.");
       }
     } catch (error) {
@@ -90,7 +89,7 @@ export default function LoginPage() {
         if (error.message.includes("Invalid login credentials")) {
             errorMessage = "البريد الإلكتروني أو كلمة المرور غير صحيحة.";
         } else if (error.message.includes("Email not confirmed")) {
-            errorMessage = "لم يتم تأكيد البريد الإلكتروني. يرجى التحقق من صندوق الوارد الخاص بك.";
+            errorMessage = "تم إرسال رمز OTP لتفعيل حسابك. يرجى التحقق من بريدك الإلكتروني.";
         } else {
             console.error("Supabase Login Error:", error);
             errorMessage = error.message || "فشل تسجيل الدخول.";
