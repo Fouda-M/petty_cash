@@ -10,8 +10,8 @@ import Logo from '@/components/shared/Logo';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useToast } from "@/hooks/use-toast";
 import * as React from "react";
-import { supabase } from '@/lib/supabase/client'; // Import Supabase client
-import { AuthApiError } from '@supabase/supabase-js'; // Import Supabase error type
+import { supabase } from '@/lib/supabase/client';
+import { AuthApiError } from '@supabase/supabase-js';
 import { Loader2 } from 'lucide-react';
 
 
@@ -52,15 +52,14 @@ export default function LoginPage() {
           title: "تم تسجيل الدخول بنجاح!",
           description: "أهلاً بعودتك! يتم الآن توجيهك إلى لوحة التحكم.",
         });
+        sessionStorage.removeItem('isGuest'); // Clear guest flag on successful login
         router.push('/dashboard'); 
       } else {
-        // Should not happen if no error, but as a fallback
         throw new Error("فشل تسجيل الدخول. لم يتم إرجاع بيانات المستخدم أو الجلسة.");
       }
     } catch (error) {
       let errorMessage = "فشل تسجيل الدخول. يرجى التحقق من بريدك الإلكتروني وكلمة المرور.";
        if (error instanceof AuthApiError) {
-        // Supabase specific error handling
         if (error.message.includes("Invalid login credentials")) {
             errorMessage = "البريد الإلكتروني أو كلمة المرور غير صحيحة.";
         } else if (error.message.includes("Email not confirmed")) {
@@ -85,6 +84,13 @@ export default function LoginPage() {
     }
   };
 
+  const handleContinueAsGuest = () => {
+    sessionStorage.setItem('isGuest', 'true');
+    // Optionally, ensure any previous Supabase session data in localStorage is cleared
+    // This is generally handled by onAuthStateChange in RootLayout not finding a user
+    router.push('/dashboard');
+  };
+
   return (
     <div className="container mx-auto flex flex-col items-center justify-center min-h-screen p-4">
       <Card className="w-full max-w-md shadow-xl">
@@ -93,7 +99,7 @@ export default function LoginPage() {
             <Logo />
           </div>
           <CardTitle className="text-3xl font-bold">تسجيل الدخول</CardTitle>
-          <CardDescription>مرحباً بعودتك! يرجى إدخال بياناتك للمتابعة.</CardDescription>
+          <CardDescription>مرحباً بعودتك! يرجى إدخال بياناتك للمتابعة أو الاستمرار كضيف.</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleLogin} className="space-y-6">
@@ -110,6 +116,9 @@ export default function LoginPage() {
               {isLoading ? 'جارٍ تسجيل الدخول...' : 'تسجيل الدخول'}
             </Button>
           </form>
+          <Button variant="outline" onClick={handleContinueAsGuest} className="w-full text-lg py-6 mt-4">
+            المتابعة كضيف
+          </Button>
           <div className="mt-6 text-center">
             <p className="text-sm text-muted-foreground">
               ليس لديك حساب؟{' '}

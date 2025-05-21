@@ -4,7 +4,7 @@
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import Logo from '@/components/shared/Logo';
-import { PlusCircle, History, Download, Upload, Loader2, ListOrdered, DatabaseBackup, DatabaseZap } from 'lucide-react';
+import { PlusCircle, History, Loader2, ListOrdered, DatabaseBackup, DatabaseZap } from 'lucide-react';
 import * as React from "react";
 import { useToast } from "@/hooks/use-toast";
 import { backupUserTripsToServerAction, listUserBackupsAction, restoreFromBackupAction } from '@/actions/backupActions';
@@ -21,6 +21,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { format } from "date-fns";
 import { arSA } from "date-fns/locale";
+import { supabase } from '@/lib/supabase/client'; // For checking guest status
+import { useRouter } from 'next/navigation';
+
 
 interface BackupItem {
   id: string;
@@ -28,8 +31,13 @@ interface BackupItem {
   created_at: string;
 }
 
-export default function DashboardPage() {
+interface DashboardPageProps {
+  isGuest?: boolean; // Prop to indicate guest mode
+}
+
+export default function DashboardPage({ isGuest: propIsGuest }: DashboardPageProps) {
   const { toast } = useToast();
+  const router = useRouter();
   const [isBackingUp, setIsBackingUp] = React.useState(false);
   const [isRestoring, setIsRestoring] = React.useState(false);
   const [isRestoreDialogOpen, setIsRestoreDialogOpen] = React.useState(false);
@@ -37,8 +45,27 @@ export default function DashboardPage() {
   const [availableBackups, setAvailableBackups] = React.useState<BackupItem[]>([]);
   const [selectedBackupId, setSelectedBackupId] = React.useState<string | undefined>(undefined);
   const [isLoadingBackups, setIsLoadingBackups] = React.useState(false);
+  const [isGuestMode, setIsGuestMode] = React.useState(false);
+  const [isLoadingGuestCheck, setIsLoadingGuestCheck] = React.useState(true);
+
+  React.useEffect(() => {
+    if (propIsGuest !== undefined) {
+      setIsGuestMode(propIsGuest);
+      setIsLoadingGuestCheck(false);
+    } else {
+      // Fallback to session storage if prop not passed (e.g. direct navigation)
+      const guestStatus = sessionStorage.getItem('isGuest') === 'true';
+      setIsGuestMode(guestStatus);
+      setIsLoadingGuestCheck(false);
+    }
+  }, [propIsGuest]);
+
 
   const handleCreateBackup = async () => {
+    if (isGuestMode) {
+        toast({ variant: "destructive", title: "غير مسموح", description: "يجب تسجيل الدخول لإنشاء نسخ احتياطية على الخادم." });
+        return;
+    }
     setIsBackingUp(true);
     try {
       const result = await backupUserTripsToServerAction();
@@ -62,8 +89,9 @@ export default function DashboardPage() {
   };
 
   const fetchAvailableBackups = async () => {
+    if (isGuestMode) return;
     setIsLoadingBackups(true);
-    setSelectedBackupId(undefined); // Reset selection
+    setSelectedBackupId(undefined);
     try {
       const result = await listUserBackupsAction();
       if (result.success && result.backups) {
@@ -91,12 +119,16 @@ export default function DashboardPage() {
   };
 
   React.useEffect(() => {
-    if (isRestoreDialogOpen) {
+    if (isRestoreDialogOpen && !isGuestMode) {
       fetchAvailableBackups();
     }
-  }, [isRestoreDialogOpen]);
+  }, [isRestoreDialogOpen, isGuestMode]);
 
   const handleRestoreFromServer = async () => {
+    if (isGuestMode) {
+        toast({ variant: "destructive", title: "غير مسموح", description: "يجب تسجيل الدخول لاستعادة النسخ من الخادم." });
+        return;
+    }
     if (!selectedBackupId) {
       toast({
         variant: "destructive",
@@ -129,14 +161,28 @@ export default function DashboardPage() {
       setIsRestoring(false);
     }
   };
+  
+  if (isLoadingGuestCheck) {
+    return (
+        <div className="flex justify-center items-center min-h-[calc(100vh-8rem)]">
+            <Loader2 className="ms-2 h-8 w-8 animate-spin text-primary" />
+            <p className="ps-3">جارٍ التحقق...</p>
+        </div>
+    );
+  }
+
+  const pageTitle = isGuestMode ? "مرحباً بك كضيف في عهدة" : "مرحباً بك في عهدة";
+  const pageDescription = isGuestMode 
+    ? "يمكنك تجربة تسجيل رحلة واحدة وحساب معاملاتها. لحفظ رحلات متعددة ومزامنتها، يرجى تسجيل الدخول أو إنشاء حساب."
+    : "نظامك المتكامل لتتبع وإدارة عهدات الرحلات بسهولة ودقة.";
 
   return (
     <div className="container mx-auto flex flex-col items-center justify-center min-h-[calc(100vh-8rem)] p-4 md:p-8">
       <div className="mb-12 text-center">
         <Logo />
-        <h1 className="text-4xl font-bold tracking-tight mt-6">مرحباً بك في عهدة</h1>
+        <h1 className="text-4xl font-bold tracking-tight mt-6">{pageTitle}</h1>
         <p className="text-muted-foreground mt-2 text-lg">
-          نظامك المتكامل لتتبع وإدارة عهدات الرحلات بسهولة ودقة.
+          {pageDescription}
         </p>
       </div>
       <div className="space-y-6 w-full max-w-md text-center">
@@ -147,50 +193,54 @@ export default function DashboardPage() {
           <Link href="/manage-trip" passHref legacyBehavior>
             <Button size="lg" className="w-full sm:w-auto text-lg py-7 px-8 shadow-lg hover:shadow-xl transition-shadow">
               <PlusCircle className="ms-2 h-6 w-6" />
-              تسجيل رحلة جديدة
+              {isGuestMode ? "تجربة تسجيل رحلة" : "تسجيل رحلة جديدة"}
             </Button>
           </Link>
-          <Link href="/saved-trips" passHref legacyBehavior>
-            <Button 
-              size="lg" 
-              variant="outline" 
-              className="w-full sm:w-auto text-lg py-7 px-8 shadow-lg hover:shadow-xl transition-shadow"
-            >
-              <History className="ms-2 h-6 w-6" />
-              الرحلات السابقة
-            </Button>
-          </Link>
+          {!isGuestMode && (
+            <Link href="/saved-trips" passHref legacyBehavior>
+                <Button 
+                size="lg" 
+                variant="outline" 
+                className="w-full sm:w-auto text-lg py-7 px-8 shadow-lg hover:shadow-xl transition-shadow"
+                >
+                <History className="ms-2 h-6 w-6" />
+                الرحلات السابقة
+                </Button>
+            </Link>
+          )}
         </div>
-        <div className="pt-8 border-t mt-8">
-            <p className="text-xl font-semibold mb-4">
-             إدارة البيانات (على الخادم):
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Button 
-                    onClick={handleCreateBackup} 
-                    disabled={isBackingUp}
-                    size="lg" 
-                    variant="secondary"
-                    className="w-full sm:w-auto text-lg py-7 px-8 shadow-md hover:shadow-lg transition-shadow"
-                >
-                    {isBackingUp ? <Loader2 className="ms-2 h-5 w-5 animate-spin" /> : <DatabaseBackup className="ms-2 h-6 w-6" />}
-                    {isBackingUp ? 'جارٍ الحفظ...' : 'إنشاء نسخة احتياطية على الخادم'}
-                </Button>
-                <Button 
-                    onClick={() => setIsRestoreDialogOpen(true)} 
-                    disabled={isRestoring} // Should not be disabled by this button's action
-                    size="lg" 
-                    variant="secondary"
-                    className="w-full sm:w-auto text-lg py-7 px-8 shadow-md hover:shadow-lg transition-shadow"
-                >
-                    <DatabaseZap className="ms-2 h-6 w-6" />
-                    استعادة نسخة من الخادم
-                </Button>
+        {!isGuestMode && (
+            <div className="pt-8 border-t mt-8">
+                <p className="text-xl font-semibold mb-4">
+                إدارة البيانات (على الخادم):
+                </p>
+                <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                    <Button 
+                        onClick={handleCreateBackup} 
+                        disabled={isBackingUp || isGuestMode}
+                        size="lg" 
+                        variant="secondary"
+                        className="w-full sm:w-auto text-lg py-7 px-8 shadow-md hover:shadow-lg transition-shadow"
+                    >
+                        {isBackingUp ? <Loader2 className="ms-2 h-5 w-5 animate-spin" /> : <DatabaseBackup className="ms-2 h-6 w-6" />}
+                        {isBackingUp ? 'جارٍ الحفظ...' : 'إنشاء نسخة احتياطية على الخادم'}
+                    </Button>
+                    <Button 
+                        onClick={() => setIsRestoreDialogOpen(true)} 
+                        disabled={isRestoring || isGuestMode}
+                        size="lg" 
+                        variant="secondary"
+                        className="w-full sm:w-auto text-lg py-7 px-8 shadow-md hover:shadow-lg transition-shadow"
+                    >
+                        <DatabaseZap className="ms-2 h-6 w-6" />
+                        استعادة نسخة من الخادم
+                    </Button>
+                </div>
             </div>
-        </div>
+        )}
       </div>
 
-      <Dialog open={isRestoreDialogOpen} onOpenChange={(open) => {
+      <Dialog open={isRestoreDialogOpen && !isGuestMode} onOpenChange={(open) => {
           setIsRestoreDialogOpen(open);
           if (!open) {
             setAvailableBackups([]);
@@ -249,5 +299,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-
-    
