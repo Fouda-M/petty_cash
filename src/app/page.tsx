@@ -25,19 +25,27 @@ export default function LoginPage() {
     const checkUserSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
-        router.replace('/dashboard'); 
-      } else {
-        setIsAuthLoading(false);
+        // If user is already logged in, and not in guest mode, redirect to dashboard
+        const isGuest = sessionStorage.getItem('isGuest') === 'true';
+        if (!isGuest) {
+            router.replace('/dashboard');
+            return; // Important to return to prevent setIsAuthLoading(false) too early
+        }
       }
+      setIsAuthLoading(false);
     };
 
     checkUserSession();
 
     const { data: authListenerData } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN') {
-        router.replace('/dashboard');
+        const isGuest = sessionStorage.getItem('isGuest') === 'true';
+        if (!isGuest) {
+          router.replace('/dashboard');
+        }
       } else if (event === 'SIGNED_OUT') {
-        setIsAuthLoading(false); 
+        // When signed out, ensure we are on the login page or allow loading it
+        setIsAuthLoading(false);
       }
     });
 
@@ -79,7 +87,10 @@ export default function LoginPage() {
           description: "أهلاً بعودتك! يتم الآن توجيهك إلى لوحة التحكم.",
         });
         sessionStorage.removeItem('isGuest'); 
+        // router.push will be handled by onAuthStateChange
       } else {
+        // This case should ideally not be reached if signInWithPassword succeeds without error
+        // but data.user or data.session is null.
         throw new Error("فشل تسجيل الدخول. لم يتم إرجاع بيانات المستخدم أو الجلسة.");
       }
     } catch (error) {
@@ -88,6 +99,8 @@ export default function LoginPage() {
         if (error.message.includes("Invalid login credentials")) {
             errorMessage = "البريد الإلكتروني أو كلمة المرور غير صحيحة.";
         } else if (error.message.includes("Email not confirmed")) {
+            // This message might appear if email confirmation is enabled in Supabase and user hasn't confirmed.
+            // You can adjust this based on your Supabase settings.
             errorMessage = "تم إرسال رمز OTP لتفعيل حسابك. يرجى التحقق من بريدك الإلكتروني.";
         } else {
             console.error("Supabase Login Error:", error);
@@ -111,29 +124,28 @@ export default function LoginPage() {
 
   const handleContinueAsGuest = async () => {
     setIsLoading(true);
+    // Ensure any existing user session is cleared before entering guest mode
     const { error: signOutError } = await supabase.auth.signOut();
     if (signOutError) {
       console.error("Error signing out before guest mode:", signOutError);
+      // Potentially notify user or handle error, but proceed to guest mode for now
     }
     sessionStorage.setItem('isGuest', 'true');
     router.push('/dashboard');
+    // setIsLoading(false); // Router push will unmount or re-render, so loading state might not need manual reset here
   };
 
   const handleForgotPassword = async () => {
     const email = window.prompt("يرجى إدخال عنوان بريدك الإلكتروني لإعادة تعيين كلمة المرور:");
     if (!email) {
-      toast({
-        variant: "default",
-        title: "تم الإلغاء",
-        description: "تم إلغاء عملية إعادة تعيين كلمة المرور.",
-      });
+      // User cancelled the prompt, do nothing (no toast).
       return;
     }
 
     setIsLoading(true);
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        // redirectTo: `${window.location.origin}/auth/update-password`, // You'll need to create this page
+        // redirectTo: `${window.location.origin}/auth/update-password`, // You'll need to create this page if you want a custom password update page
       });
       if (error) {
         throw error;
@@ -215,3 +227,4 @@ export default function LoginPage() {
     </div>
   );
 }
+
