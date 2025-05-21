@@ -29,17 +29,23 @@ export default function RootLayout({
 
   React.useEffect(() => {
     setIsLoadingAuth(true);
-    const guestStatus = sessionStorage.getItem('isGuest') === 'true';
-    setIsGuest(guestStatus);
+    // Initial check for guest status from sessionStorage
+    const initialGuestStatus = sessionStorage.getItem('isGuest') === 'true';
+    setIsGuest(initialGuestStatus);
+    if (initialGuestStatus) { // If initially guest, ensure user state is null
+        setUser(null);
+    }
 
     const { data: authListenerData } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         const supaUser = session?.user ?? null;
         setUser(supaUser);
-        if (supaUser) { 
-            sessionStorage.removeItem('isGuest');
+
+        if (supaUser) { // If a user signs IN or session is restored
+            sessionStorage.removeItem('isGuest'); // Clear guest flag
             setIsGuest(false);
-        } else {
+        } else { // If user signs OUT or session is initially null
+            // Re-check guest status from storage, as it might have been set by "Continue as Guest"
             const currentGuestStatus = sessionStorage.getItem('isGuest') === 'true';
             setIsGuest(currentGuestStatus);
         }
@@ -47,21 +53,27 @@ export default function RootLayout({
       }
     );
 
-    // Check initial session
-    async function getInitialSession() {
-      const { data: { session } } = await supabase.auth.getSession();
-      const supaUser = session?.user ?? null;
-      setUser(supaUser);
-      if (supaUser) {
-        sessionStorage.removeItem('isGuest');
-        setIsGuest(false);
-      } else {
-        const currentGuestStatus = sessionStorage.getItem('isGuest') === 'true';
-        setIsGuest(currentGuestStatus);
-      }
-      setIsLoadingAuth(false);
+    // Initial session check. This will run AFTER initialGuestStatus is set.
+    // If not initially in guest mode, try to get the session.
+    if (!initialGuestStatus) {
+        supabase.auth.getSession().then(({ data: { session } }) => {
+            const supaUser = session?.user ?? null;
+            setUser(supaUser);
+            if (supaUser) { // If a session is found, it overrides guest mode
+                sessionStorage.removeItem('isGuest');
+                setIsGuest(false);
+            }
+            // If no session and not initially guest, isGuest remains false.
+            setIsLoadingAuth(false);
+        }).catch(() => {
+            // Handle potential error in getSession, though unlikely for just reading
+            setIsLoadingAuth(false);
+        });
+    } else {
+        // If initially guest, we've already set user to null and isGuest to true.
+        // No need to call getSession, just stop loading.
+        setIsLoadingAuth(false);
     }
-    getInitialSession();
 
     return () => {
       authListenerData?.subscription?.unsubscribe();
@@ -69,20 +81,23 @@ export default function RootLayout({
   }, []);
 
   const handleLogout = async () => {
-    sessionStorage.removeItem('isGuest');
+    sessionStorage.removeItem('isGuest'); // Ensure guest mode is cleared on logout
     setIsGuest(false);
     const { error } = await supabase.auth.signOut();
     if (error) {
       console.error("Error logging out:", error);
     }
+    // onAuthStateChange will set user to null and isGuest to false (or re-evaluate from sessionStorage if needed)
     router.push('/'); 
   };
 
   const handleLoginRedirect = () => {
     sessionStorage.removeItem('isGuest');
-    setIsGuest(false);
+    setIsGuest(false); // Update state immediately
     router.push('/');
   };
+
+  const dashboardLink = (user || isGuest) ? "/dashboard" : "/";
 
   return (
     <html lang="ar" dir="rtl" suppressHydrationWarning>
@@ -100,13 +115,23 @@ export default function RootLayout({
         <div className="flex flex-col min-h-screen">
           <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 no-print">
             <div className="container flex h-16 items-center justify-between">
-              <Link href={user || isGuest ? "/dashboard" : "/"} passHref>
+              <Link href={dashboardLink} passHref>
                 <Logo />
               </Link>
               <div className="flex items-center gap-3">
                 {isLoadingAuth ? (
                     <div className="text-sm text-muted-foreground">جارٍ التحميل...</div>
-                ) : user ? (
+                ) : isGuest ? ( // Prioritize showing Guest UI if isGuest is true
+                  <>
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                       <UserX2 className="h-5 w-5 text-primary" />
+                       <span>وضع الضيف</span>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={handleLoginRedirect}>
+                      تسجيل الدخول / إنشاء حساب
+                    </Button>
+                  </>
+                ) : user ? ( // If not guest, and user exists, show user UI
                   <>
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                        <UserCircle2 className="h-5 w-5 text-primary" />
@@ -117,17 +142,7 @@ export default function RootLayout({
                       تسجيل الخروج
                     </Button>
                   </>
-                ) : isGuest ? (
-                  <>
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                       <UserX2 className="h-5 w-5 text-primary" />
-                       <span>وضع الضيف</span>
-                    </div>
-                    <Button variant="outline" size="sm" onClick={handleLoginRedirect}>
-                      تسجيل الدخول / إنشاء حساب
-                    </Button>
-                  </>
-                ) : (
+                ) : ( // If not guest and no user, show Login button (e.g., on initial load at '/')
                   <Link href="/" passHref legacyBehavior>
                      <Button variant="outline" size="sm">
                         تسجيل الدخول
@@ -140,6 +155,7 @@ export default function RootLayout({
           <main className="flex-1">
             {React.Children.map(children, child => {
                 if (React.isValidElement(child)) {
+                    // Pass isGuest to child pages
                     return React.cloneElement(child as React.ReactElement<any>, { isGuest });
                 }
                 return child;
