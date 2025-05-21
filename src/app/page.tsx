@@ -11,14 +11,39 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { useToast } from "@/hooks/use-toast";
 import * as React from "react";
 import { supabase } from '@/lib/supabase/client';
-import { AuthApiError } from '@supabase/supabase-js';
+import type { AuthApiError, User } from '@supabase/supabase-js';
 import { Loader2 } from 'lucide-react';
-
 
 export default function LoginPage() {
   const { toast } = useToast();
   const router = useRouter();
   const [isLoading, setIsLoading] = React.useState(false);
+  const [isAuthLoading, setIsAuthLoading] = React.useState(true); // New state for auth check
+
+  React.useEffect(() => {
+    const checkUserSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        router.replace('/dashboard'); // Use replace to avoid login page in history
+      } else {
+        setIsAuthLoading(false);
+      }
+    };
+
+    checkUserSession();
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN') {
+        router.replace('/dashboard');
+      } else if (event === 'SIGNED_OUT') {
+        setIsAuthLoading(false); // Allow login form to show
+      }
+    });
+
+    return () => {
+      authListener?.unsubscribe();
+    };
+  }, [router]);
 
   const handleLogin = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -53,8 +78,10 @@ export default function LoginPage() {
           description: "أهلاً بعودتك! يتم الآن توجيهك إلى لوحة التحكم.",
         });
         sessionStorage.removeItem('isGuest'); // Clear guest flag on successful login
-        router.push('/dashboard'); 
+        // onAuthStateChange will handle redirect
       } else {
+        // This case should ideally not be reached if signInWithPassword succeeds.
+        // If it does, it implies an unexpected state from Supabase.
         throw new Error("فشل تسجيل الدخول. لم يتم إرجاع بيانات المستخدم أو الجلسة.");
       }
     } catch (error) {
@@ -86,10 +113,17 @@ export default function LoginPage() {
 
   const handleContinueAsGuest = () => {
     sessionStorage.setItem('isGuest', 'true');
-    // Optionally, ensure any previous Supabase session data in localStorage is cleared
-    // This is generally handled by onAuthStateChange in RootLayout not finding a user
     router.push('/dashboard');
   };
+
+  if (isAuthLoading) {
+    return (
+      <div className="flex justify-center items-center min-h-screen">
+        <Loader2 className="ms-2 h-8 w-8 animate-spin text-primary" />
+        <p className="ps-3">جارٍ التحقق من الجلسة...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto flex flex-col items-center justify-center min-h-screen p-4">
