@@ -37,7 +37,6 @@ export default function LoginPage() {
       if (event === 'SIGNED_IN') {
         router.replace('/dashboard');
       } else if (event === 'SIGNED_OUT') {
-        // When signed out, ensure auth loading is false so login page can render
         setIsAuthLoading(false); 
       }
     });
@@ -80,9 +79,7 @@ export default function LoginPage() {
           description: "أهلاً بعودتك! يتم الآن توجيهك إلى لوحة التحكم.",
         });
         sessionStorage.removeItem('isGuest'); 
-        // onAuthStateChange in RootLayout will handle redirect if not already handled here
       } else {
-        // This case should ideally not happen if signInWithPassword succeeds without error
         throw new Error("فشل تسجيل الدخول. لم يتم إرجاع بيانات المستخدم أو الجلسة.");
       }
     } catch (error) {
@@ -91,7 +88,6 @@ export default function LoginPage() {
         if (error.message.includes("Invalid login credentials")) {
             errorMessage = "البريد الإلكتروني أو كلمة المرور غير صحيحة.";
         } else if (error.message.includes("Email not confirmed")) {
-            // This message might not be relevant if email confirmation is disabled in Supabase
             errorMessage = "تم إرسال رمز OTP لتفعيل حسابك. يرجى التحقق من بريدك الإلكتروني.";
         } else {
             console.error("Supabase Login Error:", error);
@@ -115,17 +111,46 @@ export default function LoginPage() {
 
   const handleContinueAsGuest = async () => {
     setIsLoading(true);
-    // Sign out any existing authenticated user first
     const { error: signOutError } = await supabase.auth.signOut();
     if (signOutError) {
       console.error("Error signing out before guest mode:", signOutError);
-      // Optionally, show a toast to the user if signing out fails,
-      // but still proceed to guest mode.
     }
     sessionStorage.setItem('isGuest', 'true');
-    // The onAuthStateChange in RootLayout will set user to null, and then isGuest to true
     router.push('/dashboard');
-    // setIsLoading(false); // Not strictly necessary due to navigation
+  };
+
+  const handleForgotPassword = async () => {
+    const email = window.prompt("يرجى إدخال عنوان بريدك الإلكتروني لإعادة تعيين كلمة المرور:");
+    if (!email) {
+      toast({
+        variant: "default",
+        title: "تم الإلغاء",
+        description: "تم إلغاء عملية إعادة تعيين كلمة المرور.",
+      });
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        // redirectTo: `${window.location.origin}/auth/update-password`, // You'll need to create this page
+      });
+      if (error) {
+        throw error;
+      }
+      toast({
+        title: "تم إرسال طلب إعادة التعيين",
+        description: "إذا كان هناك حساب مرتبط بهذا البريد الإلكتروني، فسيتم إرسال رابط لإعادة تعيين كلمة المرور إليه.",
+      });
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "خطأ في إعادة تعيين كلمة المرور",
+        description: error.message || "حدث خطأ غير متوقع.",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   if (isAuthLoading) {
@@ -156,6 +181,17 @@ export default function LoginPage() {
             <div className="space-y-2">
               <Label htmlFor="password">كلمة المرور</Label>
               <Input id="password" name="password" type="password" placeholder="********" required />
+            </div>
+            <div className="text-start mt-1">
+              <Button
+                type="button"
+                variant="link"
+                className="p-0 h-auto text-sm text-primary hover:underline"
+                onClick={handleForgotPassword}
+                disabled={isLoading}
+              >
+                نسيت كلمة المرور؟
+              </Button>
             </div>
             <Button type="submit" className="w-full text-lg py-6" disabled={isLoading}>
               {isLoading && <Loader2 className="ms-2 h-5 w-5 animate-spin" />}
