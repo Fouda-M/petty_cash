@@ -25,11 +25,10 @@ export default function LoginPage() {
     const checkUserSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
-        // If user is already logged in, and not in guest mode, redirect to dashboard
         const isGuest = sessionStorage.getItem('isGuest') === 'true';
         if (!isGuest) {
             router.replace('/dashboard');
-            return; // Important to return to prevent setIsAuthLoading(false) too early
+            return; 
         }
       }
       setIsAuthLoading(false);
@@ -44,7 +43,6 @@ export default function LoginPage() {
           router.replace('/dashboard');
         }
       } else if (event === 'SIGNED_OUT') {
-        // When signed out, ensure we are on the login page or allow loading it
         setIsAuthLoading(false);
       }
     });
@@ -87,10 +85,7 @@ export default function LoginPage() {
           description: "أهلاً بعودتك! يتم الآن توجيهك إلى لوحة التحكم.",
         });
         sessionStorage.removeItem('isGuest'); 
-        // router.push will be handled by onAuthStateChange
       } else {
-        // This case should ideally not be reached if signInWithPassword succeeds without error
-        // but data.user or data.session is null.
         throw new Error("فشل تسجيل الدخول. لم يتم إرجاع بيانات المستخدم أو الجلسة.");
       }
     } catch (error) {
@@ -99,8 +94,6 @@ export default function LoginPage() {
         if (error.message.includes("Invalid login credentials")) {
             errorMessage = "البريد الإلكتروني أو كلمة المرور غير صحيحة.";
         } else if (error.message.includes("Email not confirmed")) {
-            // This message might appear if email confirmation is enabled in Supabase and user hasn't confirmed.
-            // You can adjust this based on your Supabase settings.
             errorMessage = "تم إرسال رمز OTP لتفعيل حسابك. يرجى التحقق من بريدك الإلكتروني.";
         } else {
             console.error("Supabase Login Error:", error);
@@ -124,45 +117,12 @@ export default function LoginPage() {
 
   const handleContinueAsGuest = async () => {
     setIsLoading(true);
-    // Ensure any existing user session is cleared before entering guest mode
     const { error: signOutError } = await supabase.auth.signOut();
     if (signOutError) {
       console.error("Error signing out before guest mode:", signOutError);
-      // Potentially notify user or handle error, but proceed to guest mode for now
     }
     sessionStorage.setItem('isGuest', 'true');
     router.push('/dashboard');
-    // setIsLoading(false); // Router push will unmount or re-render, so loading state might not need manual reset here
-  };
-
-  const handleForgotPassword = async () => {
-    const email = window.prompt("يرجى إدخال عنوان بريدك الإلكتروني لإعادة تعيين كلمة المرور:");
-    if (!email) {
-      // User cancelled the prompt, do nothing (no toast).
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        // redirectTo: `${window.location.origin}/auth/update-password`, // You'll need to create this page if you want a custom password update page
-      });
-      if (error) {
-        throw error;
-      }
-      toast({
-        title: "تم إرسال طلب إعادة التعيين",
-        description: "إذا كان هناك حساب مرتبط بهذا البريد الإلكتروني، فسيتم إرسال رابط لإعادة تعيين كلمة المرور إليه.",
-      });
-    } catch (error: any) {
-      toast({
-        variant: "destructive",
-        title: "خطأ في إعادة تعيين كلمة المرور",
-        description: error.message || "حدث خطأ غير متوقع.",
-      });
-    } finally {
-      setIsLoading(false);
-    }
   };
 
   if (isAuthLoading) {
@@ -195,15 +155,11 @@ export default function LoginPage() {
               <Input id="password" name="password" type="password" placeholder="********" required />
             </div>
             <div className="text-start mt-1">
-              <Button
-                type="button"
-                variant="link"
-                className="p-0 h-auto text-sm text-primary hover:underline"
-                onClick={handleForgotPassword}
-                disabled={isLoading}
-              >
-                نسيت كلمة المرور؟
-              </Button>
+              <Link href="/auth/forgot-password" passHref legacyBehavior>
+                <a className="p-0 h-auto text-sm text-primary hover:underline">
+                  نسيت كلمة المرور؟
+                </a>
+              </Link>
             </div>
             <Button type="submit" className="w-full text-lg py-6" disabled={isLoading}>
               {isLoading && <Loader2 className="ms-2 h-5 w-5 animate-spin" />}
@@ -227,4 +183,3 @@ export default function LoginPage() {
     </div>
   );
 }
-
