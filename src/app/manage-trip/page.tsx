@@ -40,8 +40,15 @@ export default function ManageTripPage({ isGuest: propIsGuest }: ManageTripPageP
   const { toast } = useToast();
   const tripDetailsFormRef = React.useRef<TripDetailsFormRef>(null);
 
+  // Local states for user and guest mode, initialized based on prop or sessionStorage
   const [user, setUser] = React.useState<User | null>(null);
-  const [isGuestMode, setIsGuestMode] = React.useState(false);
+  const [isGuestMode, setIsGuestMode] = React.useState(() => {
+    if (typeof window !== 'undefined') {
+      return propIsGuest !== undefined ? propIsGuest : sessionStorage.getItem('isGuest') === 'true';
+    }
+    return propIsGuest !== undefined ? propIsGuest : false;
+  });
+
   const [transactions, setTransactions] = React.useState<Transaction[]>([]);
   const [currentTripDetails, setCurrentTripDetails] = React.useState<TripDetailsFormData | null>(null);
   const [exchangeRates, setExchangeRates] = React.useState<ExchangeRates>(() => ({ ...DEFAULT_EXCHANGE_RATES_TO_USD }));
@@ -54,132 +61,150 @@ export default function ManageTripPage({ isGuest: propIsGuest }: ManageTripPageP
   const [isSavingFullTrip, setIsSavingFullTrip] = React.useState(false);
   const [reportDataForPrint, setReportDataForPrint] = React.useState<ReportDataPayload | null>(null);
 
-  const loadNewTripDefaults = React.useCallback(() => {
-    console.log("[ManageTripPage Debug] loadNewTripDefaults called");
-    setCurrentTripDetails(null);
-    setTransactions([]);
-    setExchangeRates(loadRatesFromLocal()); // Load from local storage or defaults
-    tripDetailsFormRef.current?.resetForm(null);
-    setEditingTripId(null);
-    if (!isGuestMode) router.replace('/manage-trip', undefined); // Clear query params for non-guests
-    console.log("[ManageTripPage Debug] Initialized as a new trip.");
-  }, [isGuestMode, router]);
-
   React.useEffect(() => {
     let isMounted = true;
+    console.log("[ManageTripPage Debug] Main useEffect triggered. propIsGuest:", propIsGuest, "searchParams:", searchParams.get('edit'));
     setIsLoadingPage(true);
 
-    const determineGuestStatusAndUser = async () => {
-      const guestStatusFromStorage = sessionStorage.getItem('isGuest') === 'true';
-      if (propIsGuest !== undefined) {
-        setIsGuestMode(propIsGuest);
-      } else {
-        setIsGuestMode(guestStatusFromStorage);
-      }
-
+    const initializePage = async () => {
+      // Determine current user and guest status for this load cycle
       const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user && !guestStatusFromStorage) { // If a user session exists and not forced guest
-        setUser(session.user);
-        if (isGuestMode) setIsGuestMode(false); // Correct guest mode if user is actually logged in
-      } else if (guestStatusFromStorage) {
-        setUser(null); // Ensure user is null in guest mode
-      } else { // No user, not explicitly guest -> probably needs login
-        if (isMounted) {
-            toast({ title: "غير مصرح به", description: "يرجى تسجيل الدخول أو الاستمرار كضيف.", variant: "destructive" });
-            router.push('/');
-        }
-        return false; // Indicate that further loading should stop
-      }
-      return true; // Indicate that user/guest status is determined
-    };
-
-    const initializePageData = async (isCurrentlyGuest: boolean, currentUser: User | null) => {
-      const tripIdToEditParam = searchParams.get('edit');
+      const activeUser = session?.user ?? null;
       
-      if (tripIdToEditParam && !isCurrentlyGuest && currentUser) {
+      let activeGuestMode = propIsGuest !== undefined ? propIsGuest : (typeof window !== 'undefined' && sessionStorage.getItem('isGuest') === 'true');
+      if (activeUser && activeGuestMode) { // User logged in, but guest mode was somehow set, correct it.
+          activeGuestMode = false;
+          if (typeof window !== 'undefined') sessionStorage.removeItem('isGuest');
+      }
+      
+      if (isMounted) {
+        setUser(activeUser);
+        setIsGuestMode(activeGuestMode);
+      }
+
+      if (!activeUser && !activeGuestMode) {
+        if (isMounted) {
+          toast({ title: "غير مصرح به", description: "يرجى تسجيل الدخول أو الاستمرار كضيف.", variant: "destructive" });
+          router.push('/');
+          setIsLoadingPage(false);
+        }
+        return;
+      }
+
+      const tripIdToEditParam = searchParams.get('edit');
+      console.log("[ManageTripPage Debug] tripIdToEditParam:", tripIdToEditParam, "activeGuestMode:", activeGuestMode, "activeUser:", !!activeUser);
+
+      if (tripIdToEditParam && !activeGuestMode && activeUser) {
+        console.log(`[ManageTripPage Debug] Attempting to load trip ID: ${tripIdToEditParam} for editing.`);
         setEditingTripId(tripIdToEditParam);
         try {
           const { data: tripToLoad, error: fetchError } = await supabase
             .from('trips')
             .select('*')
             .eq('id', tripIdToEditParam)
-            .eq('user_id', currentUser.id)
+            .eq('user_id', activeUser.id)
             .single();
 
           if (fetchError && isMounted) {
             toast({ variant: "destructive", title: "خطأ في تحميل الرحلة", description: `لم يتم العثور على الرحلة أو حدث خطأ: ${fetchError.message}. سيتم بدء رحلة جديدة.` });
-            loadNewTripDefaults();
+            if (isMounted) {
+                setCurrentTripDetails(null);
+                setTransactions([]);
+                setExchangeRates(loadRatesFromLocal());
+                tripDetailsFormRef.current?.resetForm(null);
+                setEditingTripId(null); // Clear editingTripId as we are defaulting to new
+                 router.replace('/manage-trip', undefined);
+                console.log("[ManageTripPage Debug] Error loading edit trip, defaulted to new trip.");
+            }
           } else if (tripToLoad && isMounted) {
             const tripData = tripToLoad as any;
             const details = tripData.details;
-            if (details && details.tripStartDate && details.tripEndDate) {
-              const loadedTripDetails: TripDetailsFormData = { ...details, tripStartDate: new Date(details.tripStartDate), tripEndDate: new Date(details.tripEndDate) };
-              setCurrentTripDetails(loadedTripDetails);
-              tripDetailsFormRef.current?.resetForm(loadedTripDetails);
+             if (details && details.tripStartDate && details.tripEndDate) {
+                const loadedTripDetails: TripDetailsFormData = { ...details, tripStartDate: new Date(details.tripStartDate), tripEndDate: new Date(details.tripEndDate) };
+                setCurrentTripDetails(loadedTripDetails);
+                tripDetailsFormRef.current?.resetForm(loadedTripDetails);
+            } else {
+                 setCurrentTripDetails(null);
+                 tripDetailsFormRef.current?.resetForm(null);
             }
             const rawTransactions = Array.isArray(tripData.transactions) ? tripData.transactions : [];
             const parsedTransactions = rawTransactions.map((t: any) => ({ ...t, id: t.id || crypto.randomUUID(), date: new Date(t.date), amount: Number(t.amount) || 0, type: t.type as TransactionType })).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
             setTransactions(parsedTransactions);
             setExchangeRates(tripData.exchange_rates || loadRatesFromLocal());
             toast({ title: "تم تحميل الرحلة للتعديل", description: `يتم الآن تعديل رحلة: ${tripData.name || 'غير مسماة'}` });
-          } else if (isMounted) {
+            console.log("[ManageTripPage Debug] Successfully loaded trip for editing. Transactions count:", parsedTransactions.length);
+          } else if (isMounted) { // Trip not found or other issue
             toast({ variant: "destructive", title: "خطأ", description: "لم يتم العثور على الرحلة المطلوبة للتعديل. سيتم بدء رحلة جديدة." });
-            loadNewTripDefaults();
+             if (isMounted) {
+                setCurrentTripDetails(null);
+                setTransactions([]);
+                setExchangeRates(loadRatesFromLocal());
+                tripDetailsFormRef.current?.resetForm(null);
+                setEditingTripId(null);
+                 router.replace('/manage-trip', undefined);
+                console.log("[ManageTripPage Debug] Trip to edit not found, defaulted to new trip.");
+            }
           }
         } catch (error: any) {
           if (isMounted) {
             toast({ variant: "destructive", title: "خطأ في تحميل الرحلة", description: `حدث خطأ: ${error.message}. سيتم بدء رحلة جديدة.` });
-            loadNewTripDefaults();
+            if (isMounted) {
+                setCurrentTripDetails(null);
+                setTransactions([]);
+                setExchangeRates(loadRatesFromLocal());
+                tripDetailsFormRef.current?.resetForm(null);
+                setEditingTripId(null);
+                 router.replace('/manage-trip', undefined);
+                console.log("[ManageTripPage Debug] Exception loading edit trip, defaulted to new trip.");
+            }
           }
         }
       } else { // New trip or guest mode
-        loadNewTripDefaults();
-      }
-      if (isMounted) setIsLoadingPage(false);
-    };
-    
-    determineGuestStatusAndUser().then(canProceed => {
-        if (isMounted && canProceed) {
-            // Access isGuestMode and user from state which should be set by determineGuestStatusAndUser
-            // This is a bit tricky as state updates are async. Let's use the direct values from determine...
-            const guestStatus = propIsGuest !== undefined ? propIsGuest : sessionStorage.getItem('isGuest') === 'true';
-            const activeUser = user; // user state from outer scope, should be updated by onAuthStateChange
-            initializePageData(guestStatus, activeUser);
-        } else if (isMounted && !canProceed) {
-             setIsLoadingPage(false); // Stop loading if user check fails
+        if (isMounted) {
+            console.log("[ManageTripPage Debug] Initializing for new trip or guest mode.");
+            setCurrentTripDetails(null);
+            setTransactions([]);
+            setExchangeRates(loadRatesFromLocal());
+            tripDetailsFormRef.current?.resetForm(null);
+            setEditingTripId(null);
+            if (!activeGuestMode && activeUser) { // Clear query params only for logged-in users starting a new trip
+                 router.replace('/manage-trip', undefined);
+            }
+            console.log("[ManageTripPage Debug] New trip initialized.");
         }
-    });
+      }
+      
+      if (isMounted) {
+        setIsLoadingPage(false);
+        console.log("[ManageTripPage Debug] Page loading finished.");
+      }
+    };
 
+    initializePage();
 
-    return () => { isMounted = false; };
-  }, [searchParams, router, toast, loadNewTripDefaults, propIsGuest, user]); // Added user to deps for re-check
+    return () => { 
+      isMounted = false;
+      console.log("[ManageTripPage Debug] Component unmounted or useEffect re-ran.");
+    };
+  // Dependencies that should trigger re-initialization:
+  // - searchParams: If the 'edit' param changes.
+  // - propIsGuest: If the guest status from RootLayout changes.
+  // router and toast are stable.
+  }, [searchParams, propIsGuest, router, toast]);
+
 
   const handleTripDetailsUpdate = (details: TripDetailsFormData) => {
     setCurrentTripDetails(details);
-    // For guests or non-server saved trips, save active details to localStorage
-    if (isGuestMode || !editingTripId) {
-        localStorage.setItem("activeTripDetails_v2", JSON.stringify(details));
-    }
   };
 
   const handleAddTransaction = (newTransaction: Transaction) => {
-    setTransactions((prevTransactions) => {
-      const updated = [...prevTransactions, newTransaction].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-      if (isGuestMode || !editingTripId) {
-        localStorage.setItem("activeTransactions_v2", JSON.stringify(updated));
-      }
-      return updated;
-    });
+    setTransactions((prevTransactions) => 
+      [...prevTransactions, newTransaction].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    );
   };
 
   const handleDeleteTransaction = (id: string) => {
-    setTransactions(prev => {
-        const updated = prev.filter(t => t.id !== id);
-        if (isGuestMode || !editingTripId) {
-            localStorage.setItem("activeTransactions_v2", JSON.stringify(updated));
-        }
-        return updated;
-    });
+    setTransactions(prev => prev.filter(t => t.id !== id));
     toast({ title: "تم حذف المعاملة" });
   };
 
@@ -194,13 +219,9 @@ export default function ManageTripPage({ isGuest: propIsGuest }: ManageTripPageP
   };
 
   const handleTransactionUpdated = (updatedTransaction: Transaction) => {
-    setTransactions(prev => {
-      const updated = prev.map(t => t.id === updatedTransaction.id ? updatedTransaction : t).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-      if (isGuestMode || !editingTripId) {
-        localStorage.setItem("activeTransactions_v2", JSON.stringify(updated));
-      }
-      return updated;
-    });
+    setTransactions(prev => 
+      prev.map(t => t.id === updatedTransaction.id ? updatedTransaction : t).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    );
     handleCloseEditModal();
   };
 
@@ -210,24 +231,31 @@ export default function ManageTripPage({ isGuest: propIsGuest }: ManageTripPageP
       toast({ variant: "destructive", title: "بيانات الرحلة غير صالحة", description: "يرجى مراجعة وتصحيح بيانات الرحلة في النموذج." });
       return;
     }
-    if (transactions.length === 0 && !editingTripId && !isGuestMode) {
+    if (transactions.length === 0 && !editingTripId && !isGuestMode) { // editingTripId can be null for new trips too
       toast({ variant: "destructive", title: "لا توجد معاملات", description: "يرجى إضافة معاملة واحدة على الأقل للطباعة." });
       return;
     }
-    setReportDataForPrint({ tripDetails: latestValidatedDetails, transactions, exchangeRates });
+
+    setReportDataForPrint({
+        tripDetails: latestValidatedDetails,
+        transactions: transactions,
+        exchangeRates: exchangeRates
+    });
+    
     setTimeout(() => {
-      if (typeof window !== "undefined") {
-        window.print();
-      }
-      setTimeout(() => {
-        setReportDataForPrint(null);
-      }, 1000);
-    }, 100);
+        if (typeof window !== "undefined") {
+            window.print();
+        }
+        // Delay hiding the report to allow print dialog to process
+        setTimeout(() => {
+            setReportDataForPrint(null);
+        }, 1000); 
+    }, 100); 
   };
 
   const handleRatesUpdate = (newRates: ExchangeRates) => {
     setExchangeRates(newRates);
-    saveRatesToLocal(newRates); // Save to local storage for persistence for current session/guest
+    saveRatesToLocal(newRates);
     toast({ title: "تم تحديث أسعار الصرف محليًا لهذه الرحلة" });
   };
 
@@ -248,7 +276,10 @@ export default function ManageTripPage({ isGuest: propIsGuest }: ManageTripPageP
       setIsSavingFullTrip(false);
       return;
     }
-    if (!editingTripId && transactions.length === 0) {
+    
+    const currentEditingTripId = searchParams.get('edit'); // Re-fetch in case state is stale
+
+    if (!currentEditingTripId && transactions.length === 0) {
       toast({ variant: "destructive", title: "لا توجد معاملات", description: "يرجى إضافة معاملة واحدة على الأقل قبل حفظ رحلة جديدة." });
       setIsSavingFullTrip(false);
       return;
@@ -256,28 +287,38 @@ export default function ManageTripPage({ isGuest: propIsGuest }: ManageTripPageP
 
     const tripName = `${validatedTripDetails.driverName} - ${validatedTripDetails.cityName || validatedTripDetails.countryName} - ${format(validatedTripDetails.tripStartDate, 'dd/MM/yyyy')}`;
     const detailsForDb = { ...validatedTripDetails, tripStartDate: validatedTripDetails.tripStartDate.toISOString(), tripEndDate: validatedTripDetails.tripEndDate.toISOString() };
-    const transactionsForDb = transactions.map(t => ({ ...t, date: t.date.toISOString() }));
-    const tripDataPayload = { user_id: user.id, name: tripName, details: detailsForDb, transactions: transactionsForDb, exchange_rates: exchangeRates };
+    const transactionsForDb = transactions.map(t => ({ ...t, date: new Date(t.date).toISOString() }));
+    
+    const tripDataPayload = { 
+        user_id: user.id, 
+        name: tripName, 
+        details: detailsForDb, 
+        transactions: transactionsForDb, 
+        exchange_rates: exchangeRates 
+    };
 
     try {
       let error;
-      if (editingTripId) {
-        const { error: updateError } = await supabase.from('trips').update({ ...tripDataPayload, updated_at: new Date().toISOString() }).eq('id', editingTripId).eq('user_id', user.id);
+      if (currentEditingTripId) {
+        console.log(`[ManageTripPage Debug] Updating trip ID: ${currentEditingTripId} on server.`);
+        const { error: updateError } = await supabase.from('trips').update({ ...tripDataPayload, updated_at: new Date().toISOString() }).eq('id', currentEditingTripId).eq('user_id', user.id);
         error = updateError;
       } else {
+        console.log("[ManageTripPage Debug] Inserting new trip to server.");
         const { error: insertError } = await supabase.from('trips').insert({ ...tripDataPayload, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }).select().single();
         error = insertError;
       }
       if (error) throw error;
-      toast({ title: editingTripId ? "تم تحديث الرحلة بنجاح!" : "تم حفظ الرحلة بنجاح!", description: `تم ${editingTripId ? 'تحديث' : 'حفظ'} رحلة "${tripName}".` });
+      toast({ title: currentEditingTripId ? "تم تحديث الرحلة بنجاح!" : "تم حفظ الرحلة بنجاح!", description: `تم ${currentEditingTripId ? 'تحديث' : 'حفظ'} رحلة "${tripName}".` });
       
-      // Clear local storage for active trip data after successful save to server
-      localStorage.removeItem("activeTripDetails_v2");
-      localStorage.removeItem("activeTransactions_v2");
-      // Do not clear general exchange rates from localStorage here, user might want to keep them.
+      // Reset state for a new trip
+      setCurrentTripDetails(null);
+      setTransactions([]);
+      setExchangeRates(loadRatesFromLocal());
+      tripDetailsFormRef.current?.resetForm(null);
+      setEditingTripId(null);
+      router.replace('/saved-trips'); // Go to saved trips page
 
-      loadNewTripDefaults();
-      router.push('/saved-trips');
     } catch (generalError: any) {
       toast({ variant: "destructive", title: "خطأ في حفظ/تحديث الرحلة", description: generalError.message || "حدث خطأ غير متوقع." });
     } finally {
@@ -286,11 +327,11 @@ export default function ManageTripPage({ isGuest: propIsGuest }: ManageTripPageP
   };
 
   if (isLoadingPage) {
-    return <div className="flex justify-center items-center min-h-screen"><Loader2 className="ms-2 h-8 w-8 animate-spin text-primary" /> <p className="ps-3">جارٍ تحميل البيانات...</p></div>;
+    return <div className="flex justify-center items-center min-h-[calc(100vh-8rem)]"><Loader2 className="ms-2 h-8 w-8 animate-spin text-primary" /> <p className="ps-3">جارٍ تحميل البيانات...</p></div>;
   }
   
-  const saveButtonText = editingTripId ? "تحديث الرحلة بالكامل والانتقال إلى السجل" : "حفظ الرحلة بالكامل والانتقال إلى السجل";
-  const saveButtonIcon = editingTripId ? <Edit className="ms-2 h-5 w-5" /> : <Save className="ms-2 h-5 w-5" />;
+  const saveButtonText = searchParams.get('edit') ? "تحديث الرحلة بالكامل والانتقال إلى السجل" : "حفظ الرحلة بالكامل والانتقال إلى السجل";
+  const saveButtonIcon = searchParams.get('edit') ? <Edit className="ms-2 h-5 w-5" /> : <Save className="ms-2 h-5 w-5" />;
 
   return (
     <div className="container mx-auto p-4 md:p-8 space-y-8">
@@ -333,7 +374,7 @@ export default function ManageTripPage({ isGuest: propIsGuest }: ManageTripPageP
 
       {!isGuestMode && (
         <div className="mt-8 pt-6 border-t no-print">
-            <Button onClick={handleSaveFullTrip} className="w-full md:w-auto" size="lg" disabled={isSavingFullTrip || isGuestMode}>
+            <Button onClick={handleSaveFullTrip} className="w-full md:w-auto" size="lg" disabled={isSavingFullTrip || (isGuestMode && !user) }> {/* Adjusted disabled condition slightly */}
             {isSavingFullTrip && <Loader2 className="ms-2 h-4 w-4 animate-spin" />}
             {saveButtonIcon}
             {saveButtonText}
@@ -361,3 +402,4 @@ export default function ManageTripPage({ isGuest: propIsGuest }: ManageTripPageP
     </div>
   );
 }
+
