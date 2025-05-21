@@ -32,36 +32,45 @@ type UpdatePasswordFormData = z.infer<typeof UpdatePasswordSchema>;
 export default function UpdatePasswordPage() {
   const { toast } = useToast();
   const router = useRouter();
-  const searchParams = useSearchParams(); // To check for Supabase specific params if needed later
+  // useSearchParams can be used if Supabase starts putting recovery tokens in query params instead of hash.
+  // const searchParams = useSearchParams(); 
   const [isLoading, setIsLoading] = React.useState(false);
   const [isSuccess, setIsSuccess] = React.useState(false);
   const [errorMsg, setErrorMsg] = React.useState<string | null>(null);
 
-  // Supabase handles the session from the recovery token automatically when the page loads.
-  // We listen for the PASSWORD_RECOVERY event to confirm the user is in a password recovery state.
   React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      console.log("[UpdatePasswordPage] Page loaded. URL hash:", window.location.hash);
+    }
+
+    console.log("[UpdatePasswordPage] Setting up onAuthStateChange listener.");
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log(`[UpdatePasswordPage] Auth event: ${event}`, session);
       if (event === "PASSWORD_RECOVERY") {
-        // User has been redirected from email, session should contain recovery info.
-        // No specific action needed here for now, Supabase client handles token.
+        console.log("[UpdatePasswordPage] PASSWORD_RECOVERY event received. Session:", JSON.stringify(session, null, 2));
+        // This event indicates Supabase has processed the token from the URL fragment.
+        // The session object here should be a "recovery" session.
+        // No specific action needed here for now, Supabase client handles token and sets up the session.
       } else if (event === "USER_UPDATED") {
-        // This event fires after a successful password update.
+        console.log("[UpdatePasswordPage] USER_UPDATED event received. Session:", JSON.stringify(session, null, 2));
+        // This event fires after a successful password update using the recovery session.
+      } else if (session) {
+        console.log(`[UpdatePasswordPage] Other auth event with session (${event}):`, JSON.stringify(session, null, 2));
+      } else {
+        console.log(`[UpdatePasswordPage] Other auth event without session (${event})`);
       }
     });
 
-    // Check if access_token is in URL, which indicates a recovery link was used
-    const accessToken = searchParams.get('access_token');
-    // A more robust check might involve verifying the token type if Supabase adds that to URL
-    if (!accessToken && !supabase.auth.getSession()) { // Quick check if not already in recovery flow from URL
-        // If no token in URL and no active session, likely an invalid access to this page.
-        // However, Supabase's updateUser might still work if a recovery flow was initiated correctly.
-        // Let's allow the form for now, Supabase will error if token is missing/invalid.
-    }
+    // Optionally, check current session state on mount
+    supabase.auth.getSession().then(({ data }) => {
+        console.log("[UpdatePasswordPage] Initial getSession() on mount:", JSON.stringify(data.session, null, 2));
+    });
 
     return () => {
+      console.log("[UpdatePasswordPage] Unsubscribing from onAuthStateChange.");
       authListener?.subscription?.unsubscribe();
     };
-  }, [searchParams, router]);
+  }, []);
 
   const form = useForm<UpdatePasswordFormData>({
     resolver: zodResolver(UpdatePasswordSchema),
@@ -77,27 +86,33 @@ export default function UpdatePasswordPage() {
     setIsSuccess(false);
 
     try {
+      console.log("[UpdatePasswordPage] Attempting supabase.auth.updateUser...");
+      // Supabase client should have established a recovery session from the URL token by this point.
       const { error } = await supabase.auth.updateUser({
         password: data.password,
       });
 
       if (error) {
+        console.error("[UpdatePasswordPage] supabase.auth.updateUser error:", error);
         throw error;
       }
 
+      console.log("[UpdatePasswordPage] Password update successful.");
       toast({
         title: "تم تحديث كلمة المرور بنجاح!",
         description: "يمكنك الآن تسجيل الدخول بكلمة المرور الجديدة.",
       });
       setIsSuccess(true);
-      // Optional: sign out user after password update to force re-login
+      // Optional: sign out user after password update to force re-login if desired
       // await supabase.auth.signOut(); 
       router.push("/"); // Redirect to login page
     } catch (error: any) {
-      console.error("Update Password Error:", error);
+      console.error("[UpdatePasswordPage] Catch block error:", error);
       let message = "فشل تحديث كلمة المرور. قد يكون الرابط غير صالح أو منتهي الصلاحية.";
-      if (error.message.includes("Invalid token") || error.message.includes("expired")) {
+      if (error.message.includes("Invalid token") || error.message.includes("expired") || error.message.includes("Token has expired or is invalid")) {
         message = "رابط إعادة تعيين كلمة المرور غير صالح أو منتهي الصلاحية. يرجى طلب رابط جديد.";
+      } else if (error.message.includes("Auth session missing")) {
+        message = "جلسة المصادقة مفقودة. تأكد من أنك تستخدم رابط إعادة التعيين الصحيح ولم تنته صلاحيته.";
       } else if (error.message) {
         message = error.message;
       }
