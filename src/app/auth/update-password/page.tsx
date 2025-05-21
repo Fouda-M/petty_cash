@@ -85,6 +85,15 @@ export default function UpdatePasswordPage() {
     setErrorMsg(null);
     setIsSuccess(false);
 
+    console.log("[UpdatePasswordPage] Attempting to update password. Checking session just before updateUser call...");
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError || !sessionData.session) {
+      console.error("[UpdatePasswordPage] onSubmit: Session check failed or no session found just before updateUser.", { sessionError, sessionData });
+      // Fall through to let supabase.auth.updateUser handle it, but this log is important.
+    } else {
+      console.log("[UpdatePasswordPage] onSubmit: Session found just before updateUser:", JSON.stringify(sessionData.session, null, 2));
+    }
+    
     try {
       console.log("[UpdatePasswordPage] Attempting supabase.auth.updateUser...");
       // Supabase client should have established a recovery session from the URL token by this point.
