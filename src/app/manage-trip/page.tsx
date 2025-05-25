@@ -315,8 +315,10 @@ function ManageTripPageContent({ isGuest: propIsGuest }: ManageTripPageProps) {
     }
   };
 
-  if (isLoadingPage) {
-    return <div className="flex justify-center items-center min-h-[calc(100vh-8rem)]"><Loader2 className="ms-2 h-8 w-8 animate-spin text-primary" /> <p className="ps-3">جارٍ تحميل البيانات...</p></div>;
+ return (
+ <Suspense fallback={<div>Loading trip management...</div>}>
+ <ManageTripPageContentInner {...{ isGuest: propIsGuest }} />
+ </Suspense>
   }
   
   const saveButtonText = editingTripId ? "تحديث الرحلة بالكامل والانتقال إلى السجل" : "حفظ الرحلة بالكامل والانتقال إلى السجل";
