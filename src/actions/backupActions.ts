@@ -9,25 +9,24 @@ import { arSA } from 'date-fns/locale';
 
 // Helper function to get Supabase client for server actions
 function getSupabaseServerClient() {
-  const cookieStore = cookies();
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value;
+        async get(name: string) {
+          const cookie = await cookies().get(name);
+          const cookieStore = await cookies();
+          const cookie = await cookieStore.get(name);
         },
         set(name: string, value: string, options: CookieOptions) {
-          try {
-            cookieStore.set({ name, value, ...options });
-          } catch (error) {
+          try { cookies().set({ name, value, ...options }); } catch (error) {
             console.warn(`[Supabase Server Client] Failed to set cookie '${name}'. Error:`, error);
           }
         },
         remove(name: string, options: CookieOptions) {
           try {
-            cookieStore.set({ name, value: '', ...options });
+            cookies().set({ name, value: '', ...options });
           } catch (error) {
             console.warn(`[Supabase Server Client] Failed to remove cookie '${name}'. Error:`, error);
           }

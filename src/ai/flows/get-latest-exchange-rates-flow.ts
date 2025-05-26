@@ -54,6 +54,11 @@ const getLatestExchangeRatesFlow = ai.defineFlow(
     outputSchema: GetLatestExchangeRatesFlowOutputSchema,
   },
   async (input: GetLatestExchangeRatesFlowInput) => { // Flow now accepts input object
+    // Ensure this only runs on the client
+    if (typeof window === "undefined") {
+      throw new Error("getLatestExchangeRatesFlow can only be called on the client");
+    }
+
     console.log(`getLatestExchangeRatesFlow started for date: ${input.date || 'latest'}`);
     let llmResponse;
     try {

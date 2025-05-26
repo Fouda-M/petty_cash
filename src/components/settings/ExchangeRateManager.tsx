@@ -50,6 +50,7 @@ export default function ExchangeRateManager({
   const { toast } = useToast();
 
   React.useEffect(() => {
+    if (typeof window === "undefined") return;
     if (isOpen && currentRates) {
       const updatedStrings: Record<Currency, string> = {} as Record<Currency, string>;
       for (const currencyInfo of CURRENCIES_INFO) {
@@ -61,7 +62,7 @@ export default function ExchangeRateManager({
       setFetchStatus("");
     }
   }, [currentRates, isOpen]);
-
+ 
   const handleRateInputChange = (currency: Currency, value: string) => {
     setEditableRateStrings((prev) => ({ ...prev, [currency]: value }));
   };

@@ -25,10 +25,14 @@ export default function LoginPage() {
     const checkUserSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
-        const isGuest = sessionStorage.getItem('isGuest') === 'true';
+        // Check if guest mode is active, if so, don't redirect from login page.
+        const isGuest = typeof window !== 'undefined' && sessionStorage.getItem('isGuest') === 'true';
         if (!isGuest) {
+            console.log("[Login Page] User session found and not in guest mode. Redirecting to dashboard.");
             router.replace('/dashboard');
             return; 
+        } else {
+            console.log("[Login Page] User session found but in guest mode. Staying on login page.");
         }
       }
       setIsAuthLoading(false);
@@ -38,12 +42,16 @@ export default function LoginPage() {
 
     const { data: authListenerData } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN') {
-        const isGuest = sessionStorage.getItem('isGuest') === 'true';
+        const isGuest = typeof window !== 'undefined' && sessionStorage.getItem('isGuest') === 'true';
         if (!isGuest) {
+          console.log("[Login Page] SIGNED_IN event and not guest. Redirecting to dashboard.");
           router.replace('/dashboard');
+        } else {
+            console.log("[Login Page] SIGNED_IN event but staying due to guest mode.");
         }
       } else if (event === 'SIGNED_OUT') {
-        setIsAuthLoading(false);
+        console.log("[Login Page] SIGNED_OUT event.");
+        setIsAuthLoading(false); // Ensure loading is false if user signs out while on this page
       }
     });
 
@@ -85,6 +93,7 @@ export default function LoginPage() {
           description: "أهلاً بعودتك! يتم الآن توجيهك إلى لوحة التحكم.",
         });
         sessionStorage.removeItem('isGuest'); 
+        // onAuthStateChange listener will handle the redirect
       } else {
         throw new Error("فشل تسجيل الدخول. لم يتم إرجاع بيانات المستخدم أو الجلسة.");
       }
@@ -117,12 +126,16 @@ export default function LoginPage() {
 
   const handleContinueAsGuest = async () => {
     setIsLoading(true);
+    console.log("[Login Page] Continuing as guest.");
+    // Sign out any existing user to ensure a clean guest session
     const { error: signOutError } = await supabase.auth.signOut();
     if (signOutError) {
-      console.error("Error signing out before guest mode:", signOutError);
+      console.error("[Login Page] Error signing out before guest mode:", signOutError);
+      // Continue anyway, as the goal is to enter guest mode
     }
     sessionStorage.setItem('isGuest', 'true');
     router.push('/dashboard');
+    // No need to setIsLoading(false) here as navigation occurs
   };
 
   if (isAuthLoading) {
@@ -155,10 +168,8 @@ export default function LoginPage() {
               <Input id="password" name="password" type="password" placeholder="********" required />
             </div>
             <div className="text-start mt-1">
-              <Link href="/auth/forgot-password" passHref legacyBehavior>
-                <a className="p-0 h-auto text-sm text-primary hover:underline">
+              <Link href="/auth/forgot-password" className="p-0 h-auto text-sm text-primary hover:underline">
                   نسيت كلمة المرور؟
-                </a>
               </Link>
             </div>
             <Button type="submit" className="w-full text-lg py-6" disabled={isLoading}>

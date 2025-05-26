@@ -12,7 +12,7 @@ import PrintableReport from "@/components/print/PrintableReport";
 import TripDetailsForm, { type TripDetailsFormRef } from "@/components/trip/TripDetailsForm";
 import type { Transaction, ExchangeRates, SavedTrip, ReportDataPayload } from "@/types";
 import type { TripDetailsFormData } from "@/lib/schemas";
-import { TransactionType, Currency } from "@/types"; // Ensure Currency is imported from types if re-exported there
+import { TransactionType, Currency } from "@/types";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Printer, Settings, ArrowRight, Save, ListChecks, Loader2, Edit } from "lucide-react";
@@ -31,18 +31,19 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 
-interface ManageTripPageProps {
-  isGuest?: boolean; // Prop to indicate guest mode
+interface ManageTripPageContentProps { // Renamed from ManageTripPageProps
+  isGuest?: boolean;
 }
 
-function ManageTripPageContent({ isGuest: propIsGuest }: ManageTripPageProps) {
+// This is the actual component logic
+function ManageTripPageContent({ isGuest: propIsGuest }: ManageTripPageContentProps) {
   const router = useRouter();
-  const searchParams = useSearchParams();
+  const searchParams = useSearchParams(); // This hook requires client-side rendering
   const { toast } = useToast();
   const tripDetailsFormRef = React.useRef<TripDetailsFormRef>(null);
 
   const [user, setUser] = React.useState<User | null>(null);
-  const [isGuestMode, setIsGuestMode] = React.useState(false); // Initialize based on prop or sessionStorage
+  const [isGuestMode, setIsGuestMode] = React.useState(false);
 
   const [transactions, setTransactions] = React.useState<Transaction[]>([]);
   const [currentTripDetails, setCurrentTripDetails] = React.useState<TripDetailsFormData | null>(null);
@@ -58,8 +59,8 @@ function ManageTripPageContent({ isGuest: propIsGuest }: ManageTripPageProps) {
 
   React.useEffect(() => {
     let isMounted = true;
+    console.log("[ManageTripPage Debug] Main useEffect triggered. searchParams:", searchParams.toString(), "propIsGuest:", propIsGuest);
     setIsLoadingPage(true);
-    console.log("[ManageTripPage Debug] Main useEffect triggered. propIsGuest:", propIsGuest);
 
     const initializePage = async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -87,11 +88,11 @@ function ManageTripPageContent({ isGuest: propIsGuest }: ManageTripPageProps) {
       }
 
       const tripIdToEditParam = searchParams.get('edit');
+      setEditingTripId(tripIdToEditParam); // Set editingTripId based on URL param
       console.log("[ManageTripPage Debug] tripIdToEditParam from URL:", tripIdToEditParam);
 
       if (tripIdToEditParam && !activeGuestMode && activeUser) {
         console.log(`[ManageTripPage Debug] Attempting to load trip ID: ${tripIdToEditParam} for editing.`);
-        setEditingTripId(tripIdToEditParam);
         try {
           const { data: tripToLoad, error: fetchError } = await supabase
             .from('trips')
@@ -106,9 +107,9 @@ function ManageTripPageContent({ isGuest: propIsGuest }: ManageTripPageProps) {
                 setCurrentTripDetails(null);
                 setTransactions([]);
                 setExchangeRates(loadRatesFromLocal());
-                if (tripDetailsFormRef.current) tripDetailsFormRef.current.resetForm(null);
-                setEditingTripId(null); 
-                 router.replace('/manage-trip', undefined);
+                tripDetailsFormRef.current?.resetForm(null);
+                // setEditingTripId(null); // Already set from searchParams or null
+                 router.replace('/manage-trip', undefined); // Clear 'edit' param
                 console.log("[ManageTripPage Debug] Error loading edit trip, defaulted to new trip state.");
             }
           } else if (tripToLoad && isMounted) {
@@ -135,8 +136,8 @@ function ManageTripPageContent({ isGuest: propIsGuest }: ManageTripPageProps) {
                 setTransactions([]);
                 setExchangeRates(loadRatesFromLocal());
                 if (tripDetailsFormRef.current) tripDetailsFormRef.current.resetForm(null);
-                setEditingTripId(null);
-                 router.replace('/manage-trip', undefined);
+                // setEditingTripId(null); // Already set from searchParams or null
+                 router.replace('/manage-trip', undefined); // Clear 'edit' param
                 console.log("[ManageTripPage Debug] Trip to edit not found (or other issue), defaulted to new trip state.");
             }
           }
@@ -148,8 +149,8 @@ function ManageTripPageContent({ isGuest: propIsGuest }: ManageTripPageProps) {
                 setTransactions([]);
                 setExchangeRates(loadRatesFromLocal());
                 if (tripDetailsFormRef.current) tripDetailsFormRef.current.resetForm(null);
-                setEditingTripId(null);
-                 router.replace('/manage-trip', undefined);
+                // setEditingTripId(null); // Already set from searchParams or null
+                 router.replace('/manage-trip', undefined); // Clear 'edit' param
                 console.log("[ManageTripPage Debug] Exception during loading edit trip, defaulted to new trip state.");
             }
           }
@@ -159,11 +160,11 @@ function ManageTripPageContent({ isGuest: propIsGuest }: ManageTripPageProps) {
             console.log("[ManageTripPage Debug] Initializing for new trip or guest mode.");
             setCurrentTripDetails(null);
             setTransactions([]);
-            setExchangeRates(loadRatesFromLocal());
+            setExchangeRates(loadRatesFromLocal()); // Use default local rates for new/guest
             if (tripDetailsFormRef.current) tripDetailsFormRef.current.resetForm(null);
-            setEditingTripId(null); // Ensure editingTripId is null for new trips
-            if (!activeGuestMode && activeUser && searchParams.get('edit')) { // Clear 'edit' param only if it was present for a logged-in user but we're now doing a new trip
-                 router.replace('/manage-trip', undefined);
+            // setEditingTripId(null); // Already set from searchParams or null
+            if (!activeGuestMode && activeUser && searchParams.get('edit')) { 
+                 router.replace('/manage-trip', undefined); // Clear 'edit' param only if it was for a logged-in user
             }
             console.log("[ManageTripPage Debug] New trip state initialized.");
         }
@@ -181,35 +182,41 @@ function ManageTripPageContent({ isGuest: propIsGuest }: ManageTripPageProps) {
       isMounted = false;
       console.log("[ManageTripPage Debug] Component unmounted or useEffect re-ran.");
     };
-  }, [searchParams, propIsGuest, router, toast]);
+  }, [searchParams, propIsGuest, router, toast]); // Dependencies
 
 
   const handleTripDetailsUpdate = (details: TripDetailsFormData) => {
+    console.log("[ManageTripPage Debug] handleTripDetailsUpdate called with:", details);
     setCurrentTripDetails(details);
   };
 
   const handleAddTransaction = (newTransaction: Transaction) => {
+    console.log("[ManageTripPage Debug] handleAddTransaction called with:", newTransaction);
     setTransactions((prevTransactions) => 
       [...prevTransactions, newTransaction].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
     );
   };
 
   const handleDeleteTransaction = (id: string) => {
+    console.log(`[ManageTripPage Debug] handleDeleteTransaction called for ID: ${id}`);
     setTransactions(prev => prev.filter(t => t.id !== id));
     toast({ title: "تم حذف المعاملة" });
   };
 
   const handleOpenEditModal = (transaction: Transaction) => {
+    console.log("[ManageTripPage Debug] handleOpenEditModal called for transaction:", transaction);
     setTransactionToEdit(transaction);
     setIsEditModalOpen(true);
   };
 
   const handleCloseEditModal = () => {
+    console.log("[ManageTripPage Debug] handleCloseEditModal called.");
     setTransactionToEdit(null);
     setIsEditModalOpen(false);
   };
 
   const handleTransactionUpdated = (updatedTransaction: Transaction) => {
+    console.log("[ManageTripPage Debug] handleTransactionUpdated called with:", updatedTransaction);
     setTransactions(prev => 
       prev.map(t => t.id === updatedTransaction.id ? updatedTransaction : t).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
     );
@@ -238,15 +245,17 @@ function ManageTripPageContent({ isGuest: propIsGuest }: ManageTripPageProps) {
         if (typeof window !== "undefined") {
             window.print();
         }
+        // It's better to hide the report after the print dialog is likely closed or printing started.
+        // This timeout is a practical way to achieve it.
         setTimeout(() => {
             setReportDataForPrint(null);
-        }, 1500); 
-    }, 300); 
+        }, 1500); // Increased delay for hiding after print
+    }, 300); // Delay for React to render the report
   };
 
   const handleRatesUpdate = (newRates: ExchangeRates) => {
     setExchangeRates(newRates);
-    saveRatesToLocal(newRates);
+    saveRatesToLocal(newRates); // Continue saving to local for guest or as a temporary cache for logged-in users
     toast({ title: "تم تحديث أسعار الصرف محليًا لهذه الرحلة" });
   };
 
@@ -265,11 +274,11 @@ function ManageTripPageContent({ isGuest: propIsGuest }: ManageTripPageProps) {
     if (!validatedTripDetails) {
       toast({ variant: "destructive", title: "بيانات الرحلة غير مكتملة أو غير صالحة", description: "يرجى إكمال وتصحيح بيانات الرحلة في النموذج أعلاه." });
       setIsSavingFullTrip(false);
+      console.error("[ManageTripPage Debug] Trip details validation failed in handleSaveFullTrip.");
       return;
     }
     
-    // Use the state variable 'editingTripId' which is set when loading an existing trip
-    const currentEditingTripId = editingTripId; 
+    const currentEditingTripId = editingTripId; // Use the state variable set from URL param
 
     if (!currentEditingTripId && transactions.length === 0) {
       toast({ variant: "destructive", title: "لا توجد معاملات", description: "يرجى إضافة معاملة واحدة على الأقل قبل حفظ رحلة جديدة." });
@@ -286,27 +295,31 @@ function ManageTripPageContent({ isGuest: propIsGuest }: ManageTripPageProps) {
         name: tripName, 
         details: detailsForDb, 
         transactions: transactionsForDb, 
-        exchange_rates: exchangeRates 
+        exchange_rates: exchangeRates // Save current exchange rates used for this trip
     };
+    console.log("[ManageTripPage Debug] Trip data to save:", JSON.stringify(tripDataPayload).substring(0,300)+'...');
 
     try {
       let error;
       if (currentEditingTripId) {
+        console.log(`[ManageTripPage Debug] Updating trip ID: ${currentEditingTripId} on server.`);
         const { error: updateError } = await supabase.from('trips').update({ ...tripDataPayload, updated_at: new Date().toISOString() }).eq('id', currentEditingTripId).eq('user_id', user.id);
         error = updateError;
       } else {
+        console.log("[ManageTripPage Debug] Inserting new trip to server.");
         const { error: insertError } = await supabase.from('trips').insert({ ...tripDataPayload, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }).select().single();
         error = insertError;
       }
       if (error) throw error;
       toast({ title: currentEditingTripId ? "تم تحديث الرحلة بنجاح!" : "تم حفظ الرحلة بنجاح!", description: `تم ${currentEditingTripId ? 'تحديث' : 'حفظ'} رحلة "${tripName}".` });
       
+      // Reset states for a new trip
       setCurrentTripDetails(null);
       setTransactions([]);
-      setExchangeRates(loadRatesFromLocal());
+      setExchangeRates(loadRatesFromLocal()); // Reset to default local rates
       if (tripDetailsFormRef.current) tripDetailsFormRef.current.resetForm(null);
-      setEditingTripId(null);
-      router.replace('/saved-trips');
+      setEditingTripId(null); // Clear editing ID
+      router.replace('/saved-trips'); 
 
     } catch (generalError: any) {
       toast({ variant: "destructive", title: "خطأ في حفظ/تحديث الرحلة", description: generalError.message || "حدث خطأ غير متوقع." });
@@ -314,20 +327,23 @@ function ManageTripPageContent({ isGuest: propIsGuest }: ManageTripPageProps) {
       setIsSavingFullTrip(false);
     }
   };
-
- return (
- <Suspense fallback={<div>Loading trip management...</div>}>
- <ManageTripPageContentInner {...{ isGuest: propIsGuest }} />
- </Suspense>
-  }
   
+  if (isLoadingPage) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center">
+        <Loader2 className="h-16 w-16 animate-spin text-primary" />
+        <p className="ps-3 text-lg">جارٍ تحميل صفحة إدارة الرحلة...</p>
+      </div>
+    );
+  }
+
   const saveButtonText = editingTripId ? "تحديث الرحلة بالكامل والانتقال إلى السجل" : "حفظ الرحلة بالكامل والانتقال إلى السجل";
   const saveButtonIcon = editingTripId ? <Edit className="ms-2 h-5 w-5" /> : <Save className="ms-2 h-5 w-5" />;
 
   return (
     <div className="container mx-auto p-4 md:p-8 space-y-8">
       <div className="flex flex-col sm:flex-row justify-between items-center gap-2 mb-6 no-print">
-        <Link href="/dashboard" passHref legacyBehavior>
+        <Link href="/dashboard" asChild>
           <Button variant="outline">
             <ArrowRight className="ms-2 h-4 w-4" />
             العودة إلى لوحة التحكم
@@ -395,11 +411,7 @@ function ManageTripPageContent({ isGuest: propIsGuest }: ManageTripPageProps) {
 }
 
 // Dynamically import the content component with ssr: false
-// We refer to the component defined above directly.
-// For this to work correctly with next/dynamic when the component is in the same file,
-// it often needs to be a default export of a module, or we wrap it.
-// A common pattern is to ensure the component being dynamically imported is "cleanly" resolvable.
-// Let's try a direct Promise.resolve for same-file components.
+// This ensures useSearchParams and other client hooks work correctly.
 const DynamicManageTripPageContent = dynamic(
   () => Promise.resolve(ManageTripPageContent), 
   { 
@@ -414,8 +426,10 @@ const DynamicManageTripPageContent = dynamic(
 );
 
 // The default export for the page now renders the dynamically imported content
-export default function ManageTripPage({ isGuest }: ManageTripPageProps) {
-  // This wrapper ensures that the part using useSearchParams is dynamically loaded.
+export default function ManageTripPage() {
+  // This wrapper ensures that the part using useSearchParams (inside ManageTripPageContent)
+  // is dynamically loaded and thus client-side rendered.
   // The isGuest prop is passed down from RootLayout or determined by the page.
+  const isGuest = typeof window !== 'undefined' && sessionStorage.getItem('isGuest') === 'true'; 
   return <DynamicManageTripPageContent isGuest={isGuest} />;
 }

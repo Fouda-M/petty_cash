@@ -22,18 +22,17 @@ import { Label } from "@/components/ui/label";
 import { format } from "date-fns";
 import { arSA } from "date-fns/locale";
 import { supabase } from '@/lib/supabase/client'; // For checking guest status
-import { useRouter } from 'next/navigation';
-
+import { useRouter, useSearchParams } from 'next/navigation';
 
 interface BackupItem {
-  id: string;
-  backup_name: string;
-  created_at: string;
+    id: string;
+    backup_name: string;
+    created_at: string;
+}
+interface DashboardPageProps {
+  isGuest?: boolean;
 }
 
-interface DashboardPageProps {
-  isGuest?: boolean; // Prop to indicate guest mode
-}
 
 export default function DashboardPage({ isGuest: propIsGuest }: DashboardPageProps) {
   const { toast } = useToast();
@@ -54,7 +53,7 @@ export default function DashboardPage({ isGuest: propIsGuest }: DashboardPagePro
       setIsLoadingGuestCheck(false);
     } else {
       // Fallback to session storage if prop not passed (e.g. direct navigation)
-      const guestStatus = sessionStorage.getItem('isGuest') === 'true';
+      const guestStatus = typeof window !== 'undefined' && sessionStorage.getItem('isGuest') === 'true';
       setIsGuestMode(guestStatus);
       setIsLoadingGuestCheck(false);
     }
@@ -190,14 +189,14 @@ export default function DashboardPage({ isGuest: propIsGuest }: DashboardPagePro
           ابدأ الآن:
         </p>
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
-          <Link href="/manage-trip" passHref legacyBehavior>
+          <Link href="/manage-trip" asChild>
             <Button size="lg" className="w-full sm:w-auto text-lg py-7 px-8 shadow-lg hover:shadow-xl transition-shadow">
               <PlusCircle className="ms-2 h-6 w-6" />
               {isGuestMode ? "تجربة تسجيل رحلة" : "تسجيل رحلة جديدة"}
             </Button>
           </Link>
           {!isGuestMode && (
-            <Link href="/saved-trips" passHref legacyBehavior>
+            <Link href="/saved-trips" asChild>
                 <Button 
                 size="lg" 
                 variant="outline" 
