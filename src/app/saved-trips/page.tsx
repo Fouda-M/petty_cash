@@ -28,11 +28,7 @@ import { cn } from "@/lib/utils";
 import { supabase } from '@/lib/supabase/client';
 import type { User as SupabaseUser } from "@supabase/supabase-js";
 
-interface SavedTripsPageProps {
-  isGuest?: boolean; // Prop to indicate guest mode
-}
-
-export default function SavedTripsPage({ isGuest: propIsGuest }: SavedTripsPageProps) {
+export default function SavedTripsPage() {
   const [currentUser, setCurrentUser] = React.useState<SupabaseUser | null>(null);
   const [isGuestMode, setIsGuestMode] = React.useState(false);
   const [savedTrips, setSavedTrips] = React.useState<SavedTrip[]>([]);
@@ -45,7 +41,8 @@ export default function SavedTripsPage({ isGuest: propIsGuest }: SavedTripsPageP
 
   React.useEffect(() => {
     setIsLoading(true);
-    let guestStatus = propIsGuest !== undefined ? propIsGuest : (typeof window !== 'undefined' && sessionStorage.getItem('isGuest') === 'true');
+    // Determine guest status from session storage
+    let guestStatus = typeof window !== 'undefined' && sessionStorage.getItem('isGuest') === 'true';
     setIsGuestMode(guestStatus);
 
     if (guestStatus) {
@@ -103,7 +100,7 @@ export default function SavedTripsPage({ isGuest: propIsGuest }: SavedTripsPageP
         fetchUserAndTrips();
     }
 
-  }, [router, toast, propIsGuest]);
+  }, [router, toast]);
 
   const getDestinationDisplay = (trip: SavedTrip): string => {
     if (trip.details.destinationType === "INTERNAL" && trip.details.cityName) return trip.details.cityName;

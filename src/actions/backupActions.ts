@@ -15,22 +15,19 @@ function getSupabaseServerClient() {
     {
       cookies: {
         async get(name: string) {
-          const cookie = await cookies().get(name);
-          const cookieStore = await cookies();
-          const cookie = await cookieStore.get(name);
+ const cookieStore = await cookies();
+          // Supabase expects the cookie value as a string, not the RequestCookie object
+ return cookieStore.get(name)?.value;
         },
-        set(name: string, value: string, options: CookieOptions) {
-          try { cookies().set({ name, value, ...options }); } catch (error) {
-            console.warn(`[Supabase Server Client] Failed to set cookie '${name}'. Error:`, error);
-          }
+        async set(name: string, value: string, options: CookieOptions) {
+ try { const cookieStore = await cookies();
+ cookieStore.set({ name, value, ...options }); } catch (error) { console.warn(`[Supabase Server Client] Failed to set cookie '${name}'. Error:`, error); }
         },
-        remove(name: string, options: CookieOptions) {
+        async remove(name: string, options: CookieOptions) {
           try {
-            cookies().set({ name, value: '', ...options });
-          } catch (error) {
-            console.warn(`[Supabase Server Client] Failed to remove cookie '${name}'. Error:`, error);
+            const cookieStore = await cookies();
+            cookieStore.set({ name, value: '', ...options });
           }
-        },
       },
     }
   );

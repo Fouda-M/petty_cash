@@ -29,14 +29,10 @@ interface BackupItem {
     backup_name: string;
     created_at: string;
 }
-interface DashboardPageProps {
-  isGuest?: boolean;
-}
 
 
-export default function DashboardPage({ isGuest: propIsGuest }: DashboardPageProps) {
+export default function DashboardPage() {
   const { toast } = useToast();
-  const router = useRouter();
   const [isBackingUp, setIsBackingUp] = React.useState(false);
   const [isRestoring, setIsRestoring] = React.useState(false);
   const [isRestoreDialogOpen, setIsRestoreDialogOpen] = React.useState(false);
@@ -48,15 +44,10 @@ export default function DashboardPage({ isGuest: propIsGuest }: DashboardPagePro
   const [isLoadingGuestCheck, setIsLoadingGuestCheck] = React.useState(true);
 
   React.useEffect(() => {
-    if (propIsGuest !== undefined) {
-      setIsGuestMode(propIsGuest);
-      setIsLoadingGuestCheck(false);
-    } else {
       // Fallback to session storage if prop not passed (e.g. direct navigation)
       const guestStatus = typeof window !== 'undefined' && sessionStorage.getItem('isGuest') === 'true';
       setIsGuestMode(guestStatus);
       setIsLoadingGuestCheck(false);
-    }
   }, [propIsGuest]);
 
 
