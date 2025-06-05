@@ -7,27 +7,38 @@ import type { SavedTrip } from '@/types';
 import { format } from 'date-fns';
 import { arSA } from 'date-fns/locale';
 
-// Helper function to get Supabase client for server actions
-function getSupabaseServerClient() {
+// Helper function to get Supabase client for server actions using service role key
+// This client should be used for actions that require elevated privileges (like backups/restores)
+// Ensure SUPABASE_SERVICE_ROLE_KEY is configured in your environment variables
+export async function createClient() {
+  const cookieStore = cookies();
+
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
     {
       cookies: {
-        async get(name: string) {
- const cookieStore = await cookies();
-          // Supabase expects the cookie value as a string, not the RequestCookie object
- return cookieStore.get(name)?.value;
+        get(name: string) {
+          return cookieStore.get(name)?.value;
         },
-        async set(name: string, value: string, options: CookieOptions) {
- try { const cookieStore = await cookies();
- cookieStore.set({ name, value, ...options }); } catch (error) { console.warn(`[Supabase Server Client] Failed to set cookie '${name}'. Error:`, error); }
-        },
-        async remove(name: string, options: CookieOptions) {
+        set(name: string, value: string, options: CookieOptions) {
           try {
-            const cookieStore = await cookies();
-            cookieStore.set({ name, value: '', ...options });
+            cookieStore.set({ name, value, ...options });
+          } catch (error) {
+            console.warn(
+              `[Supabase Server Client] Failed to set cookie '${name}'. Error:`, error
+            );
           }
+        },
+        remove(name: string, options: CookieOptions) {
+          try {
+            cookieStore.set({ name, value: '', ...options });
+          } catch (error) {
+            console.warn(
+              `[Supabase Server Client] Failed to remove cookie '${name}'. Error:`, error
+            );
+          }
+        },
       },
     }
   );
@@ -45,7 +56,7 @@ function getSupabaseServerClient() {
 
 export async function backupUserTripsToServerAction(): Promise<{ success: boolean; error?: string; backupName?: string }> {
   console.log("[Backup Action] Attempting to backup user trips to server...");
-  const supabase = getSupabaseServerClient();
+  const supabase = createClient(); // Use the client with service role key for backup
   
   const { data: { user } , error: userError } = await supabase.auth.getUser();
 
@@ -97,7 +108,7 @@ export async function backupUserTripsToServerAction(): Promise<{ success: boolea
 
 export async function listUserBackupsAction(): Promise<{ success: boolean; backups?: Array<{id: string; backup_name: string; created_at: string}>; error?: string }> {
   console.log("[List Backups Action] Attempting to list user backups...");
-  const supabase = getSupabaseServerClient();
+  const supabase = createClient(); // Use the client with service role key for listing backups
 
   const { data: { user } , error: userError } = await supabase.auth.getUser();
   if (userError || !user) {
@@ -125,7 +136,7 @@ export async function listUserBackupsAction(): Promise<{ success: boolean; backu
 
 export async function restoreFromBackupAction(backupId: string): Promise<{ success: boolean; error?: string }> {
   console.log(`[Restore Action] Attempting to restore user trips from server backup ID: ${backupId}`);
-  const supabase = getSupabaseServerClient();
+  const supabase = createClient(); // Use the client with service role key for restore
 
   const { data: { user } , error: authError } = await supabase.auth.getUser();
   if (authError || !user) {
@@ -233,5 +244,4 @@ export async function restoreFromBackupAction(backupId: string): Promise<{ succe
     return { success: false, error: `خطأ عام أثناء عملية الاستعادة: ${e.message}` };
   }
 }
-
     
