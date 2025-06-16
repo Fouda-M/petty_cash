@@ -10,6 +10,8 @@ export const DEFAULT_EXCHANGE_RATES_TO_USD: ExchangeRates = {
   [Currency.EGP]: 0.0209,  // 1 EGP = 0.0209 USD
   [Currency.JOD]: 1.41044, // 1 JOD = 1.41044 USD
   [Currency.SAR]: 0.26667, // 1 SAR = 0.26667 USD
+  [Currency.EUR]: 0.92,    // 1 EUR = 0.92 USD (Static value from prompt)
+  [Currency.GBP]: 0.79,    // 1 GBP = 0.79 USD (Static value from prompt)
 };
 
 const EXCHANGE_RATES_STORAGE_KEY = 'exchangeRates_v1';
@@ -25,15 +27,17 @@ export function loadExchangeRates(): ExchangeRates {
       const validatedRates: ExchangeRates = {} as ExchangeRates;
       let ratesChanged = false;
 
+      // Ensure all currencies from the enum have a rate, falling back to defaults
       for (const currencyCode of Object.values(Currency)) {
         const defaultRate = DEFAULT_EXCHANGE_RATES_TO_USD[currencyCode];
         if (parsedRates.hasOwnProperty(currencyCode) && typeof parsedRates[currencyCode] === 'number' && parsedRates[currencyCode]! > 0) {
           validatedRates[currencyCode] = parsedRates[currencyCode]!;
         } else {
-          validatedRates[currencyCode] = defaultRate;
-          ratesChanged = true;
+          validatedRates[currencyCode] = defaultRate; // Use app-wide default
+          ratesChanged = true; // Mark if any rate was set to default
         }
       }
+      // If any rate was defaulted, resave to ensure localStorage is up-to-date with all currencies
        if (ratesChanged) {
          saveExchangeRates(validatedRates); 
        }
@@ -51,8 +55,8 @@ export function loadExchangeRates(): ExchangeRates {
 export function saveExchangeRates(rates: ExchangeRates): void {
   if (typeof window === 'undefined') return;
   try {
-    // Ensure USD is always 1 before saving
-    const ratesToSave = { ...rates, [Currency.USD]: 1 };
+    // Ensure USD is always 1 and all defined currencies have a rate before saving
+    const ratesToSave: ExchangeRates = { ...DEFAULT_EXCHANGE_RATES_TO_USD, ...rates, [Currency.USD]: 1 };
     localStorage.setItem(EXCHANGE_RATES_STORAGE_KEY, JSON.stringify(ratesToSave));
   } catch (error) {
     console.error("Failed to save exchange rates to localStorage:", error);
@@ -62,24 +66,20 @@ export function saveExchangeRates(rates: ExchangeRates): void {
 export function getExchangeRate(from: Currency, to: Currency, currentRates?: ExchangeRates): number {
   if (from === to) return 1;
 
-  const ratesToUse = currentRates || loadExchangeRates(); // Load if not provided, or use provided
+  const ratesToUse = currentRates || loadExchangeRates(); 
 
-  const rateFromToUsd = (ratesToUse[from] !== undefined && ratesToUse[from]! > 0)
-    ? ratesToUse[from]
-    : DEFAULT_EXCHANGE_RATES_TO_USD[from];
-
-  const rateToToUsd = (ratesToUse[to] !== undefined && ratesToUse[to]! > 0)
-    ? ratesToUse[to]
-    : DEFAULT_EXCHANGE_RATES_TO_USD[to];
+  const rateFromToUsd = ratesToUse[from];
+  const rateToToUsd = ratesToUse[to];
   
   if (rateFromToUsd === undefined || rateToToUsd === undefined || rateFromToUsd <= 0 || rateToToUsd <= 0) {
-    console.warn(`Exchange rate not available or invalid in provided/default rates for ${from} to ${to}. Using fallback 1.`);
-    // Attempt fallback to complete defaults if specific rate was missing/invalid in currentRates
+    console.warn(`Exchange rate not available or invalid in provided/default rates for ${from} to ${to}. Using direct default fallback.`);
+    // Fallback to complete defaults from DEFAULT_EXCHANGE_RATES_TO_USD if specific rate was missing/invalid
     const defaultFrom = DEFAULT_EXCHANGE_RATES_TO_USD[from];
     const defaultTo = DEFAULT_EXCHANGE_RATES_TO_USD[to];
     if(defaultFrom && defaultTo && defaultFrom > 0 && defaultTo > 0) {
         return defaultFrom / defaultTo;
     }
+    console.error(`CRITICAL: Exchange rate default not found for ${from} or ${to}. Returning 1.`);
     return 1; // Ultimate fallback
   }
   
@@ -90,3 +90,5 @@ export function convertCurrency(amount: number, from: Currency, to: Currency, cu
   const rate = getExchangeRate(from, to, currentRates);
   return amount * rate;
 }
+
+    

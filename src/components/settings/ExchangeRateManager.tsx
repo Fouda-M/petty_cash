@@ -15,77 +15,63 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { ExchangeRates } from "@/types";
-import { Currency, CURRENCIES_INFO } from "@/lib/constants";
+import { Currency, getCurrencyInfo } from "@/lib/constants"; // Removed CURRENCIES_INFO
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, RefreshCw } from "lucide-react"; // Removed CalendarIcon, kept RefreshCw for potential future use if re-enabled
+import { Loader2, RefreshCw } from "lucide-react";
 import { DatePicker } from "@/components/ui/date-picker"; // Kept for UI consistency if needed later
-import { format } from "date-fns";
-
 
 interface ExchangeRateManagerProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
-  currentRates: ExchangeRates;
+  currentRates: ExchangeRates; // These are the rates loaded from localStorage/defaults
   onRatesUpdate: (newRates: ExchangeRates) => void;
 }
 
-// Static exchange rates as per prompt
-const staticExchangeRatesFromPrompt = { USD: 1.0, EUR: 0.92, GBP: 0.79 };
+// Define the specific currencies to be managed by this static dialog
+const MANAGED_CURRENCIES_INFO = [
+  getCurrencyInfo(Currency.USD)!, // USD is always 1 and read-only
+  getCurrencyInfo(Currency.EUR)!, // Add EUR if not already in your constants
+  getCurrencyInfo(Currency.GBP)!, // Add GBP if not already in your constants
+];
 
+// Static exchange rates as per prompt to be used as defaults for EUR, GBP
+// The app's DEFAULT_EXCHANGE_RATES_TO_USD will still handle other currencies like AED, SAR, EGP
+const STATIC_FALLBACK_RATES = {
+  [Currency.USD]: 1.0,
+  [Currency.EUR]: 0.92,
+  [Currency.GBP]: 0.79,
+};
 
 export default function ExchangeRateManager({
   isOpen,
   onOpenChange,
-  currentRates,
+  currentRates, // currentRates from localStorage/app defaults
   onRatesUpdate,
 }: ExchangeRateManagerProps) {
-  const [editableRateStrings, setEditableRateStrings] = React.useState<Record<string, string>>(() => {
-    const initialStrings: Record<string, string> = {};
-    for (const currencyInfo of CURRENCIES_INFO) {
-      initialStrings[currencyInfo.code] = currentRates[currencyInfo.code]?.toString() || "";
-    }
-    // Ensure static rates from prompt are also initialized if not in currentRates (though they should be)
-    // This part might be redundant if currentRates is always comprehensive
-    for (const key in staticExchangeRatesFromPrompt) {
-        if (!initialStrings[key as Currency]) {
-            initialStrings[key as Currency] = staticExchangeRatesFromPrompt[key as keyof typeof staticExchangeRatesFromPrompt].toString();
-        }
-    }
-    return initialStrings;
-  });
-
+  const [editableRateStrings, setEditableRateStrings] = React.useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = React.useState(false);
-  // State related to fetching rates dynamically - kept for UI consistency but functionality disabled
-  const [isFetchingRates, setIsFetchingRates] = React.useState(false);
-  const [selectedDate, setSelectedDate] = React.useState<Date | undefined>(undefined);
-  const [fetchStatus, setFetchStatus] = React.useState<string>("جلب أسعار الصرف الديناميكي معطل حاليًا. يتم استخدام أسعار ثابتة.");
+  const [fetchStatus, setFetchStatus] = React.useState<string>("جلب أسعار الصرف الديناميكي معطل. يتم استخدام الأسعار المدخلة أو الافتراضية.");
   const { toast } = useToast();
 
   React.useEffect(() => {
     if (isOpen) {
-      const updatedStrings: Record<string, string> = {};
-      let usingStaticFallback = false;
-
-      for (const currencyInfo of CURRENCIES_INFO) {
-        let rateToSet = currentRates[currencyInfo.code]?.toString();
-        
-        // If rate for a standard currency is missing in currentRates, try to use prompt's static rates
-        if (!rateToSet && staticExchangeRatesFromPrompt.hasOwnProperty(currencyInfo.code)) {
-            rateToSet = staticExchangeRatesFromPrompt[currencyInfo.code as keyof typeof staticExchangeRatesFromPrompt].toString();
-            usingStaticFallback = true;
+      const initialStrings: Record<string, string> = {};
+      MANAGED_CURRENCIES_INFO.forEach(currencyInfo => {
+        const code = currencyInfo.code;
+        if (code === Currency.USD) {
+          initialStrings[code] = "1"; // USD is always 1
+        } else {
+          // Prioritize currentRates (from localStorage/app defaults)
+          // Then STATIC_FALLBACK_RATES (for EUR, GBP specifically)
+          // Then empty string
+          initialStrings[code] = 
+            currentRates[code]?.toString() || 
+            STATIC_FALLBACK_RATES[code as keyof typeof STATIC_FALLBACK_RATES]?.toString() || 
+            "";
         }
-        
-        updatedStrings[currencyInfo.code] = rateToSet || "";
-      }
-      
-      // Ensure USD is always 1
-      updatedStrings[Currency.USD] = "1";
-
-      setEditableRateStrings(updatedStrings);
-      setSelectedDate(undefined);
-      setFetchStatus(usingStaticFallback 
-        ? "بعض الأسعار تم تحميلها من القيم الثابتة الافتراضية. جلب الأسعار الديناميكي معطل."
-        : "جلب أسعار الصرف الديناميكي معطل. يتم استخدام الأسعار الحالية أو الثابتة.");
+      });
+      setEditableRateStrings(initialStrings);
+      setFetchStatus("أسعار الصرف المعروضة هي للتحرير اليدوي. جلب الأسعار الديناميكي معطل.");
     }
   }, [currentRates, isOpen]);
  
@@ -94,66 +80,56 @@ export default function ExchangeRateManager({
   };
 
   const handleFetchRates = async () => {
-    // Genkit functionality is removed, so this button is now for illustrative purposes or future re-enablement.
     toast({
       title: "جلب أسعار الصرف معطل",
-      description: "تم تعطيل ميزة جلب أسعار الصرف تلقائيًا. يرجى إدخال الأسعار يدويًا أو استخدام الأسعار الثابتة.",
+      description: "تم تعطيل ميزة جلب أسعار الصرف تلقائيًا. يرجى إدخال الأسعار يدويًا.",
     });
     setFetchStatus("جلب الأسعار الديناميكي معطل. يرجى استخدام القيم المدخلة أو الثابتة.");
   };
 
   const handleSave = () => {
     setIsSaving(true);
-    const newRates: ExchangeRates = {} as ExchangeRates; // Initialize as empty
-    let allValid = true;
+    const newRatesUpdates: Partial<ExchangeRates> = {}; // Only updates for managed currencies
+    let allManagedValid = true;
 
-    for (const currencyInfo of CURRENCIES_INFO) {
+    for (const currencyInfo of MANAGED_CURRENCIES_INFO) {
       const code = currencyInfo.code;
       if (code === Currency.USD) {
-        newRates[Currency.USD] = 1;
+        newRatesUpdates[Currency.USD] = 1;
         continue;
       }
       const stringValue = editableRateStrings[code];
       const numValue = parseFloat(stringValue);
 
       if (stringValue && stringValue.trim() !== "" && !isNaN(numValue) && numValue > 0) {
-        newRates[code] = numValue;
-      } else if (staticExchangeRatesFromPrompt.hasOwnProperty(code)) { 
-        // Fallback to prompt's static rates if input is invalid or empty for known static currencies
-        newRates[code] = staticExchangeRatesFromPrompt[code as keyof typeof staticExchangeRatesFromPrompt];
-        toast({
-            variant: "default", // Use default variant for informational messages
-            title: `ملاحظة لسعر ${currencyInfo.name}`,
-            description: `تم استخدام السعر الثابت (${newRates[code]}) لـ ${currencyInfo.name} بسبب قيمة غير صالحة أو فارغة.`,
-        });
-      } else if (currentRates[code]) {
-        // Fallback to originally loaded currentRates if still no valid input and not in prompt's static
-        newRates[code] = currentRates[code];
-         toast({
-            variant: "default",
-            title: `ملاحظة لسعر ${currencyInfo.name}`,
-            description: `تم الإبقاء على السعر السابق (${newRates[code]}) لـ ${currencyInfo.name} بسبب قيمة غير صالحة أو فارغة.`,
-        });
-      }
-       else {
-        // If no valid input, no static fallback, and no currentRate, it's an issue for non-USD
-        allValid = false; // Consider it invalid if a rate can't be determined for non-USD
-        toast({
-          variant: "destructive",
-          title: "خطأ في سعر الصرف",
-          description: `سعر الصرف لـ ${currencyInfo.name} غير صالح أو مفقود. يجب أن يكون رقمًا موجبًا.`,
-        });
-        setIsSaving(false);
-        return;
+        newRatesUpdates[code] = numValue;
+      } else {
+        // If input for managed currency is invalid, revert to its known static fallback or current prop value
+        const fallbackRate = STATIC_FALLBACK_RATES[code as keyof typeof STATIC_FALLBACK_RATES] || currentRates[code];
+        if (fallbackRate && fallbackRate > 0) {
+            newRatesUpdates[code] = fallbackRate;
+            toast({
+                variant: "default",
+                title: `ملاحظة لسعر ${currencyInfo.name}`,
+                description: `تم استخدام السعر السابق/الافتراضي (${fallbackRate}) لـ ${currencyInfo.name} بسبب قيمة غير صالحة أو فارغة.`,
+            });
+        } else {
+            allManagedValid = false;
+            toast({
+              variant: "destructive",
+              title: "خطأ في سعر الصرف",
+              description: `سعر الصرف لـ ${currencyInfo.name} غير صالح أو مفقود ولا يوجد احتياطي. يجب أن يكون رقمًا موجبًا.`,
+            });
+            setIsSaving(false);
+            return;
+        }
       }
     }
     
-    // Final check for USD, should always be 1
-    newRates[Currency.USD] = 1;
-
-
-    if (allValid) {
-      onRatesUpdate(newRates);
+    if (allManagedValid) {
+      // Merge updates with existing rates, ensuring unmanaged currencies are preserved
+      const finalRatesToSave = { ...currentRates, ...newRatesUpdates, [Currency.USD]: 1 };
+      onRatesUpdate(finalRatesToSave);
       toast({
         title: "تم حفظ أسعار الصرف",
         description: "تم تحديث أسعار الصرف بنجاح.",
@@ -163,25 +139,35 @@ export default function ExchangeRateManager({
     setIsSaving(false);
   };
 
+  // Ensure EUR and GBP are in CURRENCIES_INFO if they are to be managed
+  // This check is conceptual; your CURRENCIES_INFO should be comprehensive.
+  // For this component, we are explicitly listing USD, EUR, GBP if MANAGED_CURRENCIES_INFO is used.
+  // We need to ensure getCurrencyInfo(Currency.EUR) and getCurrencyInfo(Currency.GBP) return valid CurrencyInfo.
+  // If EUR/GBP are not in your `src/lib/constants.ts` `CURRENCIES_INFO` array, 
+  // `getCurrencyInfo` would return undefined for them, and MANAGED_CURRENCIES_INFO would be incomplete.
+  // Let's assume they are defined there for `getCurrencyInfo` to work.
+  // If not, this component would need to hardcode their names/symbols or CURRENCIES_INFO needs update.
+  // For now, proceeding with the assumption that getCurrencyInfo will resolve them.
+
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>إدارة أسعار الصرف (مقابل الدولار الأمريكي)</DialogTitle>
           <DialogDescription>
-            أسعار الصرف الديناميكية معطلة. أدخل الأسعار يدويًا أو اعتمد على القيم الثابتة الافتراضية. الدولار الأمريكي ثابت عند 1.
+            أسعار الصرف الديناميكية معطلة. أدخل الأسعار يدويًا للدولار، اليورو، والجنيه الإسترليني. الدولار الأمريكي ثابت عند 1.
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid grid-cols-1 gap-4 my-3">
           <div className="space-y-2">
             <Label htmlFor="fetch-date">تاريخ أسعار الصرف (للعرض فقط)</Label>
-            <DatePicker date={selectedDate} setDate={setSelectedDate} disabled={() => true} />
+            <DatePicker date={undefined} setDate={() => {}} disabled={() => true} />
           </div>
           <Button 
               type="button" 
               onClick={handleFetchRates} 
-              disabled={true} // Feature disabled
+              disabled={true} 
               variant="outline" 
               className="w-full"
           >
@@ -192,7 +178,7 @@ export default function ExchangeRateManager({
         </div>
 
         <div className="space-y-4 py-2 max-h-[calc(50vh-120px)] overflow-y-auto px-1">
-          {CURRENCIES_INFO.map((currencyInfo) => (
+          {MANAGED_CURRENCIES_INFO.filter(Boolean).map((currencyInfo) => ( // filter(Boolean) to remove undefined if getCurrencyInfo fails
             <div key={currencyInfo.code} className="grid grid-cols-3 items-center gap-4">
               <Label htmlFor={`rate-${currencyInfo.code}`} className="col-span-1 text-sm">
                 {currencyInfo.name} ({currencyInfo.symbol})
@@ -204,7 +190,7 @@ export default function ExchangeRateManager({
                 value={currencyInfo.code === Currency.USD ? "1" : editableRateStrings[currencyInfo.code] || ""}
                 onChange={(e) => handleRateInputChange(currencyInfo.code, e.target.value)}
                 className="col-span-2"
-                placeholder="0.00000"
+                placeholder={STATIC_FALLBACK_RATES[currencyInfo.code as keyof typeof STATIC_FALLBACK_RATES]?.toString() || "0.00"}
                 disabled={currencyInfo.code === Currency.USD || isSaving}
                 readOnly={currencyInfo.code === Currency.USD}
               />
@@ -227,3 +213,4 @@ export default function ExchangeRateManager({
   );
 }
 
+    
