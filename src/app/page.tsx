@@ -11,7 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { useToast } from "@/hooks/use-toast";
 import * as React from "react";
 import { supabase } from '@/lib/supabase/client';
-import type { AuthApiError, User } from '@supabase/supabase-js';
+import { AuthApiError } from '@supabase/supabase-js';
 import { Loader2 } from 'lucide-react';
 
 export default function LoginPage() {

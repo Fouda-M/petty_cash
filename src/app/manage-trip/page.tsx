@@ -9,8 +9,8 @@ import TransactionTable from "@/components/transactions/TransactionTable";
 import BalanceSummary from "@/components/transactions/BalanceSummary";
 import PrintableReport from "@/components/print/PrintableReport";
 import TripDetailsForm, { type TripDetailsFormRef } from "@/components/trip/TripDetailsForm";
-import type { Transaction, ExchangeRates, SavedTrip } from "@/types";
-import type { TripDetailsFormData, ReportDataPayload } from "@/lib/schemas";
+import type { Transaction, ExchangeRates } from "@/types";
+import type { TripDetailsFormData } from "@/lib/schemas";
 import { TransactionType, Currency } from "@/types";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -29,6 +29,12 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+
+interface ReportDataPayload {
+  tripDetails: TripDetailsFormData;
+  transactions: Transaction[];
+  exchangeRates: ExchangeRates;
+}
 
 interface ManageTripPageContentProps { // Renamed from ManageTripPageProps
   isGuest?: boolean;
@@ -54,7 +60,7 @@ function ManageTripPageContent({ isGuest: propIsGuest }: ManageTripPageContentPr
   const [transactionToEdit, setTransactionToEdit] = React.useState<Transaction | null>(null);
   const [isExchangeRateManagerOpen, setIsExchangeRateManagerOpen] = React.useState(false);
   const [isSavingFullTrip, setIsSavingFullTrip] = React.useState(false);
-  const [reportDataForPrint, setReportDataForPrint] = React.useState<any | null>(null);
+  const [reportDataForPrint, setReportDataForPrint] = React.useState<ReportDataPayload | null>(null);
 
   React.useEffect(() => {
     let isMounted = true;
@@ -123,8 +129,8 @@ function ManageTripPageContent({ isGuest: propIsGuest }: ManageTripPageContentPr
                  if (tripDetailsFormRef.current) tripDetailsFormRef.current.resetForm(null);
             }
             const rawTransactions = Array.isArray(tripData.transactions) ? tripData.transactions : [];
-            const parsedTransactions = rawTransactions.map((t: any) => ({ ...t, id: t.id || crypto.randomUUID(), date: new Date(t.date), amount: Number(t.amount) || 0, type: t.type as TransactionType })).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-            setTransactions(parsedTransactions);
+            const parsedTransactions = rawTransactions.map((t: Transaction) => ({ ...t, id: t.id || crypto.randomUUID(), date: new Date(t.date), amount: Number(t.amount) || 0, type: t.type as TransactionType })).sort((a: Transaction, b: Transaction) => new Date(b.date).getTime() - new Date(a.date).getTime());
+            setTransactions(parsedTransactions.sort((a: Transaction, b: Transaction) => new Date(b.date).getTime() - new Date(a.date).getTime()));
             setExchangeRates(tripData.exchange_rates || loadRatesFromLocal());
             toast({ title: "تم تحميل الرحلة للتعديل", description: `يتم الآن تعديل رحلة: ${tripData.name || 'غير مسماة'}` });
             console.log("[ManageTripPage Debug] Successfully loaded trip for editing. Transactions count:", parsedTransactions.length);
@@ -192,7 +198,7 @@ function ManageTripPageContent({ isGuest: propIsGuest }: ManageTripPageContentPr
   const handleAddTransaction = (newTransaction: Transaction) => {
     console.log("[ManageTripPage Debug] handleAddTransaction called with:", newTransaction);
     setTransactions((prevTransactions) => 
-      [...prevTransactions, newTransaction].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      [...prevTransactions, newTransaction].sort((a: Transaction, b: Transaction) => new Date(b.date).getTime() - new Date(a.date).getTime())
     );
   };
 
@@ -342,8 +348,8 @@ function ManageTripPageContent({ isGuest: propIsGuest }: ManageTripPageContentPr
   return (
     <div className="container mx-auto p-4 md:p-8 space-y-8">
       <div className="flex flex-col sm:flex-row justify-between items-center gap-2 mb-6 no-print">
-        <Link href="/dashboard" asChild>
-          <Button variant="outline">
+        <Link href="/dashboard">
+          <Button asChild variant="outline">
             <ArrowRight className="ms-2 h-4 w-4" />
             العودة إلى لوحة التحكم
           </Button>

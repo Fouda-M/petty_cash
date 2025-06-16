@@ -38,10 +38,12 @@ interface TripDetailsFormProps {
 
 export interface TripDetailsFormRef {
   validateAndGetData: () => Promise<TripDetailsFormData | null>;
+  resetForm: (data?: TripDetailsFormData | null) => void;
 }
 
 const TripDetailsForm = React.forwardRef<TripDetailsFormRef, TripDetailsFormProps>(
   ({ onDetailsSubmit, initialData }, ref) => {
+
     const { toast } = useToast();
     const [isSubmitting, setIsSubmitting] = React.useState(false);
 
@@ -66,17 +68,21 @@ const TripDetailsForm = React.forwardRef<TripDetailsFormRef, TripDetailsFormProp
       }
     }, [initialData, form.reset, form]);
 
-    React.useImperativeHandle(ref, () => ({
-      validateAndGetData: async () => {
-        const isValid = await form.trigger();
-        if (isValid) {
-          return form.getValues();
+    React.useImperativeHandle(ref, () => {
+      return {
+        validateAndGetData: async () => {
+          const isValid = await form.trigger();
+          if (isValid) {
+            return form.getValues();
+          }
+          // Triggering validation will show errors on the form if any.
+          // We can also show a general toast here, but ManageTripPage will show its own.
+          return null;
         }
-        // Triggering validation will show errors on the form if any.
-        // We can also show a general toast here, but ManageTripPage will show its own.
-        return null;
-      },
-    }));
+        ,
+        resetForm: (data?: TripDetailsFormData | null) => form.reset(data)
+      };
+    });
 
     const destinationType = form.watch("destinationType");
 

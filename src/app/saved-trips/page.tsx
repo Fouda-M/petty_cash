@@ -188,7 +188,7 @@ export default function SavedTripsPage() {
           <ListChecks className="me-3 h-8 w-8 text-primary" />
           الرحلات المحفوظة
         </h1>
-        <Link href="/dashboard" asChild>
+        <Link href="/dashboard">
           <Button variant="outline">
              <ArrowRight className="ms-2 h-4 w-4" />
             العودة إلى لوحة التحكم
@@ -200,7 +200,7 @@ export default function SavedTripsPage() {
         <Card className="shadow-md">
           <CardContent className="p-8 text-center">
             <p className="text-xl text-muted-foreground">لا توجد رحلات محفوظة حتى الآن.</p>
-             <Link href="/manage-trip" asChild>
+             <Link href="/manage-trip">
                 <Button className="mt-4">
                     <PlusCircle className="ms-2 h-5 w-5" />
                     ابدأ بتسجيل رحلة جديدة
