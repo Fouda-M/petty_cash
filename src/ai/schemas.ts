@@ -18,36 +18,6 @@ export const ExchangeRateToolOutputSchema = z.object(
 export type ExchangeRateToolOutput = z.infer<typeof ExchangeRateToolOutputSchema>;
 
 
-// Schema for the input of the getLatestExchangeRatesFlow
-export const GetLatestExchangeRatesFlowInputSchema = z.object({
-  date: z.string().optional().describe('The date for which to fetch exchange rates, in YYYY-MM-DD format. If not provided, fetches latest rates.'),
-});
-export type GetLatestExchangeRatesFlowInput = z.infer<typeof GetLatestExchangeRatesFlowInputSchema>;
-
-
-// Schema for the output of the getLatestExchangeRatesFlow
-// Ensures all defined currencies in Currency enum are present.
-export const GetLatestExchangeRatesFlowOutputSchema = z.object(
-  Object.fromEntries(
-    CURRENCIES_INFO.map(c => [c.code, z.number().positive()])
-  )
-).refine(data => {
-    return Object.values(Currency).every(c => Object.prototype.hasOwnProperty.call(data, c));
-}, { message: "Output must be a valid ExchangeRates object with all currency codes mapped to positive numbers." }) as z.ZodType<AppExchangeRates>;
-
-export type GetLatestExchangeRatesFlowOutput = z.infer<typeof GetLatestExchangeRatesFlowOutputSchema>;
-
-
-// Schemas for suggestBudget flow
-export const SuggestBudgetInputSchema = z.object({
-  transactionHistory: z
-    .string()
-    .describe('A string containing the user transaction history.'),
-  income: z.number().describe('The user monthly income.'),
-  financialGoals: z.string().describe('The user financial goals.'),
-});
-export type SuggestBudgetInput = z.infer<typeof SuggestBudgetInputSchema>;
-
 export const SuggestBudgetOutputSchema = z.object({
   suggestedBudget: z.string().describe('The suggested budget plan.'),
 });

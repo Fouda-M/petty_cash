@@ -137,7 +137,7 @@ export default function RootLayout({
                     </div>
                     <Button variant="outline" size="sm" onClick={handleLoginRedirect}>
                       تسجيل الدخول / إنشاء حساب
-                    </Button>
+ </Button>
                   </>
                 ) : user ? (
                   <>
@@ -151,7 +151,7 @@ export default function RootLayout({
                     </Button>
                   </>
                 ) : ( 
-                  <Link href="/" asChild>
+                  <Link href="/">
                      <Button variant="outline" size="sm">
                         تسجيل الدخول
                      </Button>

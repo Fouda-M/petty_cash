@@ -1,4 +1,3 @@
-
 "use client";
 
 import * as React from "react";
@@ -10,8 +9,8 @@ import TransactionTable from "@/components/transactions/TransactionTable";
 import BalanceSummary from "@/components/transactions/BalanceSummary";
 import PrintableReport from "@/components/print/PrintableReport";
 import TripDetailsForm, { type TripDetailsFormRef } from "@/components/trip/TripDetailsForm";
-import type { Transaction, ExchangeRates, SavedTrip, ReportDataPayload } from "@/types";
-import type { TripDetailsFormData } from "@/lib/schemas";
+import type { Transaction, ExchangeRates, SavedTrip } from "@/types";
+import type { TripDetailsFormData, ReportDataPayload } from "@/lib/schemas";
 import { TransactionType, Currency } from "@/types";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -37,7 +36,7 @@ interface ManageTripPageContentProps { // Renamed from ManageTripPageProps
 
 // This is the actual component logic
 function ManageTripPageContent({ isGuest: propIsGuest }: ManageTripPageContentProps) {
-  const router = useRouter();
+  const router = useRouter(); // This hook requires client-side rendering
   const searchParams = useSearchParams(); // This hook requires client-side rendering
   const { toast } = useToast();
   const tripDetailsFormRef = React.useRef<TripDetailsFormRef>(null);
@@ -55,7 +54,7 @@ function ManageTripPageContent({ isGuest: propIsGuest }: ManageTripPageContentPr
   const [transactionToEdit, setTransactionToEdit] = React.useState<Transaction | null>(null);
   const [isExchangeRateManagerOpen, setIsExchangeRateManagerOpen] = React.useState(false);
   const [isSavingFullTrip, setIsSavingFullTrip] = React.useState(false);
-  const [reportDataForPrint, setReportDataForPrint] = React.useState<ReportDataPayload | null>(null);
+  const [reportDataForPrint, setReportDataForPrint] = React.useState<any | null>(null);
 
   React.useEffect(() => {
     let isMounted = true;

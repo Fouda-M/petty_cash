@@ -1,10 +1,15 @@
-import type {NextConfig} from 'next';
-// Import webpack type for custom webpack configuration
-import type { WebpackConfigContext, WebpackConfiguration } from 'next/dist/server/config-shared';
 
+import type { NextConfig } from 'next';
+import type { Configuration as WebpackConfig } from 'webpack'; // Import webpack type for custom webpack configuration
+
+const repo = 'PettyCash'; // Your repository name
+const assetPrefix = process.env.NODE_ENV === 'production' ? `/${repo}/` : '';
+const basePath = process.env.NODE_ENV === 'production' ? `/${repo}` : '';
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  output: 'export', // Required for static export to GitHub Pages
+  assetPrefix: assetPrefix,
+  basePath: basePath,
   typescript: {
     ignoreBuildErrors: true, // Keeping this as per original, but ideally should be false for a clean build
   },
@@ -12,6 +17,10 @@ const nextConfig: NextConfig = {
     ignoreDuringBuilds: true, // Keeping this as per original, but ideally should be false for a clean build
   },
   images: {
+    // If using next/image, you might need to configure unoptimized: true for static export
+    // or provide a custom loader if you host images outside of the basePath.
+    // For GitHub Pages, unoptimized is often simpler.
+    unoptimized: true, 
     remotePatterns: [
       {
         protocol: 'https',
@@ -19,32 +28,22 @@ const nextConfig: NextConfig = {
         port: '',
         pathname: '/**',
       },
+      { // Added placeholder.co for data-ai-hint images
+        protocol: 'https',
+        hostname: 'placehold.co',
+        port: '',
+        pathname: '/**',
+      }
     ],
   },
-  webpack: (
-    config: WebpackConfiguration,
-    { isServer, webpack }: WebpackConfigContext
-  ): WebpackConfiguration => {
-    // Rule for handlebars-loader (if .handlebars files are ever directly imported)
-    // This might not silence warnings if they come from handlebars internal usage by dotprompt
-    config.module?.rules?.push({
-      test: /\.handlebars$/,
-      loader: 'handlebars-loader',
+  webpack: (config: WebpackConfig) => {
+    if (!config.module) {
+      config.module = { rules: [] };
+    }
+    config.module.rules.push({
+      test: /\.handlebars$|\.hbs$/, // Match .handlebars or .hbs files
+      loader: "handlebars-loader", // Use handlebars-loader
     });
-
-    // The Jaeger warning is best fixed by installing the optional dependency,
-    // which was done in package.json. If it still appeared, an IgnorePlugin
-    // could be used, but installing the dep is cleaner if it's truly looked for.
-    // Example of IgnorePlugin if needed:
-    // if (!config.plugins) {
-    //   config.plugins = [];
-    // }
-    // config.plugins.push(
-    //   new webpack.IgnorePlugin({
-    //     resourceRegExp: /@opentelemetry\/exporter-jaeger/,
-    //   })
-    // );
-
     return config;
   },
 };

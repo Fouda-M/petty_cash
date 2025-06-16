@@ -3,16 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack -p 9002",
-    "genkit:dev": "genkit start -- tsx src/ai/dev.ts",
-    "genkit:watch": "genkit start -- tsx --watch src/ai/dev.ts",
+    "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "export": "next export",
+    "deploy": "npm run build && npm run export && touch ./out/.nojekyll && gh-pages -d out -t true",
+    "fix-code": "npm uninstall @genkit-ai/core @genkit-ai/dotprompt && npm install --save-dev handlebars-loader",
+    "clean-vercel": "rm -rf .vercel && rm -f vercel.json && sed -i '/vercel/d' .gitignore",
+    "full-deploy": "npm run fix-code && npm run build && npm run deploy && rm -rf out && git add . && git commit -m \"Automated fix and deploy to GitHub Pages\" && git push origin main"
   },
   "dependencies": {
-    "@genkit-ai/dotprompt": "^0.9.12",
     "@genkit-ai/googleai": "^1.8.0",
     "@genkit-ai/next": "^1.8.0",
     "@hookform/resolvers": "^4.1.3",
@@ -67,6 +67,7 @@
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "genkit-cli": "^1.8.0",
+    "gh-pages": "^6.1.1",
     "handlebars-loader": "^1.7.3",
     "postcss": "^8",
     "tailwindcss": "^3.4.1",

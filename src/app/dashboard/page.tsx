@@ -44,11 +44,11 @@ export default function DashboardPage() {
   const [isLoadingGuestCheck, setIsLoadingGuestCheck] = React.useState(true);
 
   React.useEffect(() => {
-      // Fallback to session storage if prop not passed (e.g. direct navigation)
+      // Check guest status from session storage on client side
       const guestStatus = typeof window !== 'undefined' && sessionStorage.getItem('isGuest') === 'true';
       setIsGuestMode(guestStatus);
       setIsLoadingGuestCheck(false);
-  }, [propIsGuest]);
+  }, []); // Empty dependency array means this runs once on mount
 
 
   const handleCreateBackup = async () => {
@@ -179,18 +179,18 @@ export default function DashboardPage() {
         <p className="text-xl font-semibold">
           ابدأ الآن:
         </p>
-        <div className="flex flex-col sm:flex-row gap-4 justify-center">
-          <Link href="/manage-trip" asChild>
+ <div className="flex flex-col sm:flex-row gap-4 justify-center">
+ <Link href="/manage-trip">
             <Button size="lg" className="w-full sm:w-auto text-lg py-7 px-8 shadow-lg hover:shadow-xl transition-shadow">
               <PlusCircle className="ms-2 h-6 w-6" />
               {isGuestMode ? "تجربة تسجيل رحلة" : "تسجيل رحلة جديدة"}
             </Button>
           </Link>
           {!isGuestMode && (
-            <Link href="/saved-trips" asChild>
-                <Button 
-                size="lg" 
-                variant="outline" 
+            <Link href="/saved-trips">
+ <Button // Removed asChild prop from here
+ size="lg"
+ variant="outline"
                 className="w-full sm:w-auto text-lg py-7 px-8 shadow-lg hover:shadow-xl transition-shadow"
                 >
                 <History className="ms-2 h-6 w-6" />
