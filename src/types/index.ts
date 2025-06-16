@@ -9,6 +9,8 @@ export enum Currency {
   EGP = 'EGP',
   JOD = 'JOD',
   SAR = 'SAR',
+  EUR = 'EUR',
+  GBP = 'GBP',
 }
 
 export enum TransactionType {
@@ -55,4 +57,11 @@ export interface SavedTrip {
   transactions: Transaction[];
   exchangeRates: ExchangeRates;
   createdAt: string; // ISO date string for when the trip was saved
+  updatedAt?: string; // ISO date string for when the trip was last updated
+}
+
+export interface ReportDataPayload {
+  tripDetails: TripDetailsFormData;
+  transactions: Transaction[];
+  exchangeRates: ExchangeRates;
 }
