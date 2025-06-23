@@ -6,11 +6,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "export": "next export",
-    "deploy": "npm run build && npm run export && touch ./out/.nojekyll && gh-pages -d out -t true",
+    "build:static": "next build",
+    "deploy": "npm run build:static && npx shx touch out/.nojekyll && gh-pages -d out --dotfiles",
     "fix-code": "npm uninstall @genkit-ai/core @genkit-ai/dotprompt && npm install --save-dev handlebars-loader",
     "clean-vercel": "rm -rf .vercel && rm -f vercel.json && sed -i '/vercel/d' .gitignore",
-    "full-deploy": "npm run fix-code && npm run build && npm run deploy && rm -rf out && git add . && git commit -m \"Automated fix and deploy to GitHub Pages\" && git push origin main"
+    "full-deploy": "npm run fix-code && npm run build:static && npm run deploy && rmdir /s /q out && git add . && git commit -m \"Automated fix and deploy to GitHub Pages\" && git push origin main"
   },
   "dependencies": {
     "@genkit-ai/googleai": "^1.8.0",
@@ -72,6 +72,7 @@
     "postcss": "^8",
     "tailwindcss": "^3.4.1",
     "typescript": "^5",
-    "webpack": "^5.99.9"
+    "webpack": "^5.99.9",
+    "shx": "^0.3.4"
   }
 }

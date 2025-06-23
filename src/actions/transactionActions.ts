@@ -1,5 +1,5 @@
 
-"use server";
+
 
 import { transactionSchema, type TransactionFormData } from "@/lib/schemas";
 import type { Transaction } from "@/types";

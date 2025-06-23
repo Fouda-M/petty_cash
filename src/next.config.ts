@@ -40,6 +40,9 @@ const nextConfig: NextConfig = {
     if (!config.module) {
       config.module = { rules: [] };
     }
+    if (!config.module.rules) {
+      config.module.rules = [];
+    }
     config.module.rules.push({
       test: /\.handlebars$|\.hbs$/, // Match .handlebars or .hbs files
       loader: "handlebars-loader", // Use handlebars-loader

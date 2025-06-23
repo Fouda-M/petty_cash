@@ -1,4 +1,4 @@
-"use server";
+
 
 // The Supabase client initialization code was removed as it was causing build issues.
 // This file now contains placeholder functions for backup/restore operations.

@@ -80,7 +80,7 @@ const TripDetailsForm = React.forwardRef<TripDetailsFormRef, TripDetailsFormProp
           return null;
         }
         ,
-        resetForm: (data?: TripDetailsFormData | null) => form.reset(data)
+        resetForm: (data?: TripDetailsFormData | null) => form.reset(data ?? undefined)
       };
     });
 

@@ -349,7 +349,7 @@ function ManageTripPageContent({ isGuest: propIsGuest }: ManageTripPageContentPr
     <div className="container mx-auto p-4 md:p-8 space-y-8">
       <div className="flex flex-col sm:flex-row justify-between items-center gap-2 mb-6 no-print">
         <Link href="/dashboard">
-          <Button asChild variant="outline">
+          <Button variant="outline">
             <ArrowRight className="ms-2 h-4 w-4" />
             العودة إلى لوحة التحكم
           </Button>
