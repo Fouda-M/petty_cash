@@ -35,7 +35,12 @@ export const getCurrencyInfo = (currencyCode: Currency): CurrencyInfo | undefine
 
 // Define which currencies appear in balance summaries etc.
 // USD, AED, EGP were original. You might want to add EUR, GBP here if they are common targets.
-export const CONVERSION_TARGET_CURRENCIES: Currency[] = [Currency.USD, Currency.AED, Currency.EGP, Currency.JOD, Currency.SAR, Currency.SYP, Currency.SDG];
+export const CONVERSION_TARGET_CURRENCIES: Currency[] = [
+  Currency.USD,
+  Currency.AED,
+  Currency.EGP,
+  Currency.SAR,
+];
 
 // ---------------- Transaction Type Info (no runtime dependency on enum) ----------------
 export interface TransactionTypeInfo {
