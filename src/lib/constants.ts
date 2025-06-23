@@ -1,5 +1,7 @@
 
-import { TransactionType as TxType } from '@/types'; // Import with an alias to avoid conflict if re-exporting
+
+
+import type { TransactionType } from '@/types';
 
 export enum Currency {
   USD = 'USD',
@@ -7,8 +9,8 @@ export enum Currency {
   EGP = 'EGP',
   JOD = 'JOD',
   SAR = 'SAR',
-  EUR = 'EUR', // Added EUR
-  GBP = 'GBP', // Added GBP
+  SYP = 'SYP', // Syrian Pound
+  SDG = 'SDG', // Sudanese Pound
 }
 
 export interface CurrencyInfo {
@@ -23,8 +25,8 @@ export const CURRENCIES_INFO: CurrencyInfo[] = [
   { code: Currency.EGP, name: 'جنيه مصري', symbol: 'ج.م' },
   { code: Currency.JOD, name: 'دينار أردني', symbol: 'د.أ' },
   { code: Currency.SAR, name: 'ريال سعودي', symbol: 'ر.س' },
-  { code: Currency.EUR, name: 'يورو', symbol: '€' }, // Added EUR info
-  { code: Currency.GBP, name: 'جنيه إسترليني', symbol: '£' }, // Added GBP info
+  { code: Currency.SYP, name: 'ليرة سورية', symbol: 'ل.س' },
+  { code: Currency.SDG, name: 'جنيه سوداني', symbol: 'ج.س' }
 ];
 
 export const getCurrencyInfo = (currencyCode: Currency): CurrencyInfo | undefined => {
@@ -33,28 +35,23 @@ export const getCurrencyInfo = (currencyCode: Currency): CurrencyInfo | undefine
 
 // Define which currencies appear in balance summaries etc.
 // USD, AED, EGP were original. You might want to add EUR, GBP here if they are common targets.
-export const CONVERSION_TARGET_CURRENCIES: Currency[] = [Currency.USD, Currency.AED, Currency.EGP, Currency.EUR, Currency.GBP];
+export const CONVERSION_TARGET_CURRENCIES: Currency[] = [Currency.USD, Currency.AED, Currency.EGP, Currency.JOD, Currency.SAR, Currency.SYP, Currency.SDG];
 
-// Re-export TransactionType for easier import elsewhere if needed, or use TxType directly.
-export const TransactionType = TxType;
-
+// ---------------- Transaction Type Info (no runtime dependency on enum) ----------------
 export interface TransactionTypeInfo {
-  type: TxType;
+  type: TransactionType;
   name: string;
   descriptionPlaceholder: string;
 }
 
 export const TRANSACTION_TYPES_INFO: TransactionTypeInfo[] = [
-  { type: TxType.EXPENSE, name: 'مصروف', descriptionPlaceholder: 'مثال: وقود, صيانة' },
-  { type: TxType.REVENUE, name: 'إيراد رحلة', descriptionPlaceholder: 'مثال: إيراد توصيلة ركاب' },
-  { type: TxType.CUSTODY_HANDOVER_OWNER, name: 'عهدة مسلمة (صاحب السيارة)', descriptionPlaceholder: 'مثال: عهدة بداية الوردية من المكتب' },
-  { type: TxType.CUSTODY_HANDOVER_CLIENT, name: 'عهدة مسلمة (العميل)', descriptionPlaceholder: 'مثال: مبلغ مدفوع مقدماً من العميل للسائق' },
-  { type: TxType.CUSTODY_RETURN, name: 'إرجاع عهدة/إيراد', descriptionPlaceholder: 'مثال: المبلغ المتبقي المُرجع من السائق للشركة' },
-  { type: TxType.DRIVER_FEE, name: 'أجرة السائق', descriptionPlaceholder: 'مثال: أجرة السائق عن الرحلة' },
+  { type: 'EXPENSE' as TransactionType, name: 'مصروف', descriptionPlaceholder: 'مثال: وقود، صيانة' },
+  { type: 'REVENUE' as TransactionType, name: 'إيراد رحلة', descriptionPlaceholder: 'مثال: إيراد توصيلة ركاب' },
+  { type: 'CUSTODY_HANDOVER_OWNER' as TransactionType, name: 'عهدة مسلمة (صاحب السيارة)', descriptionPlaceholder: 'مثال: عهدة بداية الوردية من المكتب' },
+  { type: 'CUSTODY_HANDOVER_CLIENT' as TransactionType, name: 'عهدة مسلمة (العميل)', descriptionPlaceholder: 'مثال: مبلغ مدفوع مقدماً من العميل للسائق' },
+  { type: 'CUSTODY_RETURN' as TransactionType, name: 'إرجاع عهدة/إيراد', descriptionPlaceholder: 'مثال: المبلغ المتبقي المُرجع من السائق للشركة' },
+  { type: 'DRIVER_FEE' as TransactionType, name: 'أجرة السائق', descriptionPlaceholder: 'مثال: أجرة السائق عن الرحلة' },
 ];
 
-export const getTransactionTypeInfo = (transactionType: TxType): TransactionTypeInfo | undefined => {
-  return TRANSACTION_TYPES_INFO.find(t => t.type === transactionType);
-};
-
-    
+export const getTransactionTypeInfo = (transactionType: TransactionType): TransactionTypeInfo | undefined =>
+  TRANSACTION_TYPES_INFO.find((t) => t.type === transactionType);

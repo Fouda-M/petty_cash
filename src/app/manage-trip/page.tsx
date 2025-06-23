@@ -15,7 +15,7 @@ import { TransactionType, Currency } from "@/types";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Printer, Settings, ArrowRight, Save, ListChecks, Loader2, Edit } from "lucide-react";
-import { DEFAULT_EXCHANGE_RATES_TO_USD, loadExchangeRates as loadRatesFromLocal, saveExchangeRates as saveRatesToLocal } from "@/lib/exchangeRates";
+import { DEFAULT_EXCHANGE_RATES_TO_EGP, loadExchangeRates as loadRatesFromLocal, saveExchangeRates as saveRatesToLocal } from "@/lib/exchangeRates";
 import ExchangeRateManager from "@/components/settings/ExchangeRateManager";
 import Link from "next/link";
 import { supabase } from '@/lib/supabase/client';
@@ -52,7 +52,7 @@ function ManageTripPageContent({ isGuest: propIsGuest }: ManageTripPageContentPr
 
   const [transactions, setTransactions] = React.useState<Transaction[]>([]);
   const [currentTripDetails, setCurrentTripDetails] = React.useState<TripDetailsFormData | null>(null);
-  const [exchangeRates, setExchangeRates] = React.useState<ExchangeRates>(() => ({ ...DEFAULT_EXCHANGE_RATES_TO_USD }));
+  const [exchangeRates, setExchangeRates] = React.useState<ExchangeRates>(() => ({ ...DEFAULT_EXCHANGE_RATES_TO_EGP }));
   const [editingTripId, setEditingTripId] = React.useState<string | null>(null);
 
   const [isLoadingPage, setIsLoadingPage] = React.useState(true);

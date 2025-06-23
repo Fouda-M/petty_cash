@@ -1,4 +1,3 @@
-
 "use client";
 
 import * as React from "react";
@@ -19,38 +18,47 @@ import { Currency, getCurrencyInfo } from "@/lib/constants"; // Removed CURRENCI
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, RefreshCw } from "lucide-react";
 import { DatePicker } from "@/components/ui/date-picker"; // Kept for UI consistency if needed later
+import { fetchRatesToEGP } from "@/lib/fetchRates";
+import { saveExchangeRates } from "@/lib/exchangeRates";
 
 interface ExchangeRateManagerProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
-  currentRates: ExchangeRates; // These are the rates loaded from localStorage/defaults
+  currentRates: ExchangeRates; 
   onRatesUpdate: (newRates: ExchangeRates) => void;
 }
 
-// Define the specific currencies to be managed by this static dialog
 const MANAGED_CURRENCIES_INFO = [
-  getCurrencyInfo(Currency.USD)!, // USD is always 1 and read-only
-  getCurrencyInfo(Currency.EUR)!, // Add EUR if not already in your constants
-  getCurrencyInfo(Currency.GBP)!, // Add GBP if not already in your constants
+  getCurrencyInfo(Currency.EGP)!, 
+  getCurrencyInfo(Currency.USD)!, 
+  getCurrencyInfo(Currency.SAR)!, 
+  getCurrencyInfo(Currency.AED)!, 
+  getCurrencyInfo(Currency.JOD)!, 
+  getCurrencyInfo(Currency.SYP)!, 
+  getCurrencyInfo(Currency.SDG)!,
 ];
 
-// Static exchange rates as per prompt to be used as defaults for EUR, GBP
-// The app's DEFAULT_EXCHANGE_RATES_TO_USD will still handle other currencies like AED, SAR, EGP
 const STATIC_FALLBACK_RATES = {
-  [Currency.USD]: 1.0,
-  [Currency.EUR]: 0.92,
-  [Currency.GBP]: 0.79,
+  [Currency.EGP]: 1.0,
+  [Currency.USD]: 30, 
+  [Currency.SAR]: 8,
+  [Currency.AED]: 8.3,
+  [Currency.JOD]: 42,
+  [Currency.SYP]: 0.006,
+  [Currency.SDG]: 0.09,
 };
 
 export default function ExchangeRateManager({
   isOpen,
   onOpenChange,
-  currentRates, // currentRates from localStorage/app defaults
+  currentRates, 
   onRatesUpdate,
 }: ExchangeRateManagerProps) {
   const [editableRateStrings, setEditableRateStrings] = React.useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = React.useState(false);
-  const [fetchStatus, setFetchStatus] = React.useState<string>("جلب أسعار الصرف الديناميكي معطل. يتم استخدام الأسعار المدخلة أو الافتراضية.");
+  const [isFetching, setIsFetching] = React.useState(false);
+  const [fetchStatus, setFetchStatus] = React.useState<string>("يمكنك جلب أسعار الصرف مقابل الجنيه المصري أو تعديلها يدوياً.");
+  const [rateDate, setRateDate] = React.useState<Date | undefined>(new Date());
   const { toast } = useToast();
 
   React.useEffect(() => {
@@ -58,12 +66,9 @@ export default function ExchangeRateManager({
       const initialStrings: Record<string, string> = {};
       MANAGED_CURRENCIES_INFO.forEach(currencyInfo => {
         const code = currencyInfo.code;
-        if (code === Currency.USD) {
-          initialStrings[code] = "1"; // USD is always 1
+        if (code === Currency.EGP) {
+          initialStrings[code] = "1" 
         } else {
-          // Prioritize currentRates (from localStorage/app defaults)
-          // Then STATIC_FALLBACK_RATES (for EUR, GBP specifically)
-          // Then empty string
           initialStrings[code] = 
             currentRates[code]?.toString() || 
             STATIC_FALLBACK_RATES[code as keyof typeof STATIC_FALLBACK_RATES]?.toString() || 
@@ -80,11 +85,47 @@ export default function ExchangeRateManager({
   };
 
   const handleFetchRates = async () => {
-    toast({
-      title: "جلب أسعار الصرف معطل",
-      description: "تم تعطيل ميزة جلب أسعار الصرف تلقائيًا. يرجى إدخال الأسعار يدويًا.",
-    });
-    setFetchStatus("جلب الأسعار الديناميكي معطل. يرجى استخدام القيم المدخلة أو الثابتة.");
+  setIsFetching(true);
+  try {
+    const egpRates = await fetchRatesToEGP();
+    const updated: Partial<ExchangeRates> = {
+      [Currency.USD]: egpRates[Currency.USD] ?? currentRates[Currency.USD],
+      [Currency.SAR]: egpRates[Currency.SAR] ?? currentRates[Currency.SAR],
+      [Currency.AED]: egpRates[Currency.AED] ?? currentRates[Currency.AED],
+      [Currency.JOD]: egpRates[Currency.JOD] ?? currentRates[Currency.JOD],
+      [Currency.SYP]: egpRates[Currency.SYP] ?? currentRates[Currency.SYP],
+      [Currency.SDG]: egpRates[Currency.SDG] ?? currentRates[Currency.SDG],
+    };
+    // Always ensure EGP base is 1
+    updated[Currency.EGP] = 1;
+
+    // Merge with existing and persist
+    const mergedRates = { ...currentRates, ...updated } as ExchangeRates;
+    saveExchangeRates(mergedRates);
+    onRatesUpdate(mergedRates);
+
+    setEditableRateStrings((prev) => ({
+      ...prev,
+      [Currency.USD]: mergedRates[Currency.USD].toString(),
+      [Currency.SAR]: mergedRates[Currency.SAR].toString(),
+      [Currency.AED]: mergedRates[Currency.AED].toString(),
+      [Currency.JOD]: mergedRates[Currency.JOD].toString(),
+      [Currency.SYP]: mergedRates[Currency.SYP].toString(),
+      [Currency.SDG]: mergedRates[Currency.SDG].toString(),
+    }));
+    setFetchStatus("تم جلب أسعار الصرف بنجاح.");
+    toast({ title: "تم التحديث", description: "تم جلب أحدث أسعار الصرف." });
+
+        
+
+
+    } catch (err) {
+      console.error(err);
+      toast({ variant: "destructive", title: "خطأ", description: "فشل جلب الأسعار. تأكد من الاتصال بالإنترنت." });
+      setFetchStatus("فشل جلب الأسعار. استخدم القيم الحالية.");
+    } finally {
+      setIsFetching(false);
+    }
   };
 
   const handleSave = () => {
@@ -93,11 +134,11 @@ export default function ExchangeRateManager({
     let allManagedValid = true;
 
     for (const currencyInfo of MANAGED_CURRENCIES_INFO) {
+    if (currencyInfo.code === Currency.EGP) {
+      // Skip EGP, always 1
+      continue;
+    }
       const code = currencyInfo.code;
-      if (code === Currency.USD) {
-        newRatesUpdates[Currency.USD] = 1;
-        continue;
-      }
       const stringValue = editableRateStrings[code];
       const numValue = parseFloat(stringValue);
 
@@ -128,7 +169,7 @@ export default function ExchangeRateManager({
     
     if (allManagedValid) {
       // Merge updates with existing rates, ensuring unmanaged currencies are preserved
-      const finalRatesToSave = { ...currentRates, ...newRatesUpdates, [Currency.USD]: 1 };
+      const finalRatesToSave = { ...currentRates, ...newRatesUpdates, [Currency.EGP]: 1 };
       onRatesUpdate(finalRatesToSave);
       toast({
         title: "تم حفظ أسعار الصرف",
@@ -153,26 +194,26 @@ export default function ExchangeRateManager({
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>إدارة أسعار الصرف (مقابل الدولار الأمريكي)</DialogTitle>
+          <DialogTitle>إدارة أسعار الصرف (مقابل الجنيه المصري)</DialogTitle>
           <DialogDescription>
-            أسعار الصرف الديناميكية معطلة. أدخل الأسعار يدويًا للدولار، اليورو، والجنيه الإسترليني. الدولار الأمريكي ثابت عند 1.
+            يمكنك تعديل أو جلب أسعار الصرف مقابل الجنيه المصري. قيمة الجنيه المصري ثابتة على 1.
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid grid-cols-1 gap-4 my-3">
           <div className="space-y-2">
-            <Label htmlFor="fetch-date">تاريخ أسعار الصرف (للعرض فقط)</Label>
-            <DatePicker date={undefined} setDate={() => {}} disabled={() => true} />
+            <Label htmlFor="fetch-date">تاريخ أسعار الصرف</Label>
+            <DatePicker date={rateDate} setDate={setRateDate} />
           </div>
           <Button 
               type="button" 
               onClick={handleFetchRates} 
-              disabled={true} 
+              disabled={isFetching} 
               variant="outline" 
               className="w-full"
           >
-              <RefreshCw className="ms-2 h-4 w-4" />
-              جلب أحدث أسعار الصرف (معطل)
+              {isFetching ? <Loader2 className="ms-2 h-4 w-4 animate-spin" /> : <RefreshCw className="ms-2 h-4 w-4" />} 
+              جلب أحدث أسعار الصرف
           </Button>
           {fetchStatus && <p className="text-sm text-muted-foreground text-center">{fetchStatus}</p>}
         </div>
@@ -187,12 +228,12 @@ export default function ExchangeRateManager({
                 id={`rate-${currencyInfo.code}`}
                 type="number"
                 step="any"
-                value={currencyInfo.code === Currency.USD ? "1" : editableRateStrings[currencyInfo.code] || ""}
+                value={currencyInfo.code === Currency.EGP ? "1" : editableRateStrings[currencyInfo.code] || ""}
                 onChange={(e) => handleRateInputChange(currencyInfo.code, e.target.value)}
                 className="col-span-2"
                 placeholder={STATIC_FALLBACK_RATES[currencyInfo.code as keyof typeof STATIC_FALLBACK_RATES]?.toString() || "0.00"}
-                disabled={currencyInfo.code === Currency.USD || isSaving}
-                readOnly={currencyInfo.code === Currency.USD}
+                disabled={currencyInfo.code === Currency.EGP || isSaving}
+                readOnly={currencyInfo.code === Currency.EGP}
               />
             </div>
           ))}

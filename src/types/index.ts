@@ -1,18 +1,9 @@
 
-import type { Currency as CurrencyEnum } from '@/lib/constants'; // Keep original import for type usage
+import { Currency } from '@/lib/constants';
 import type { TripDetailsFormData } from '@/lib/schemas'; // Import TripDetailsFormData
 
-// Export Currency enum directly from here
-export enum Currency {
-  USD = 'USD',
-  AED = 'AED',
-  EGP = 'EGP',
-  JOD = 'JOD',
-  SAR = 'SAR',
-  EUR = 'EUR',
-  GBP = 'GBP',
-}
-
+// Re-export Currency for convenience
+export { Currency };
 export enum TransactionType {
   EXPENSE = 'EXPENSE',
   REVENUE = 'REVENUE',
