@@ -21,6 +21,10 @@ import { useToast } from "@/hooks/use-toast";
 import { tripDetailsSchema, type TripDetailsFormData } from "@/lib/schemas";
 import { DestinationType } from "@/types";
 import { Loader2 } from "lucide-react";
+import { FormErrorIcon } from "@/components/ui/FormErrorIcon";
+import { useHotkeys } from "react-hotkeys-hook";
+import { FileUpload } from "@/components/ui/FileUpload";
+import { AutocompleteInput } from "@/components/ui/AutocompleteInput";
 
 const getBaseTripFormValues = (): Omit<TripDetailsFormData, 'tripStartDate' | 'tripEndDate'> & { tripStartDate?: Date, tripEndDate?: Date } => ({
     driverName: "",
@@ -42,31 +46,67 @@ export interface TripDetailsFormRef {
 }
 
 const TripDetailsForm = React.forwardRef<TripDetailsFormRef, TripDetailsFormProps>(
-  ({ onDetailsSubmit, initialData }, ref) => {
+  ({ onDetailsSubmit, initialData, onCancelEdit }: TripDetailsFormProps & { onCancelEdit?: () => void }, ref) => {
+
+    // Local state for attached files
+    const [attachedFiles, setAttachedFiles] = React.useState<File[]>([]);
 
     const { toast } = useToast();
     const [isSubmitting, setIsSubmitting] = React.useState(false);
 
+    const DRAFT_KEY = "pettycash_trip_details_draft";
     const form = useForm<TripDetailsFormData>({
       resolver: zodResolver(tripDetailsSchema),
+      mode: "onChange",
+      reValidateMode: "onChange",
       defaultValues: initialData || getBaseTripFormValues(),
     });
 
+    // Restore draft from localStorage if exists (only if no initialData)
     React.useEffect(() => {
-      if (initialData) {
+      if (!initialData) {
+        const draft = typeof window !== "undefined" ? localStorage.getItem(DRAFT_KEY) : null;
+        if (draft) {
+          try {
+            const parsed = JSON.parse(draft);
+            form.reset({
+              ...getBaseTripFormValues(),
+              ...parsed,
+              tripStartDate: parsed.tripStartDate ? new Date(parsed.tripStartDate) : new Date(),
+              tripEndDate: parsed.tripEndDate ? new Date(parsed.tripEndDate) : new Date(),
+            });
+          } catch {}
+        } else {
+          form.reset({
+            ...getBaseTripFormValues(),
+            tripStartDate: new Date(),
+            tripEndDate: new Date(),
+          });
+        }
+      } else {
         form.reset({
           ...initialData,
           tripStartDate: initialData.tripStartDate ? new Date(initialData.tripStartDate) : new Date(),
           tripEndDate: initialData.tripEndDate ? new Date(initialData.tripEndDate) : new Date(),
         });
-      } else {
-        form.reset({
-          ...getBaseTripFormValues(),
-          tripStartDate: new Date(),
-          tripEndDate: new Date(),
-        });
       }
     }, [initialData, form.reset, form]);
+
+    // Auto-save draft to localStorage on change
+    React.useEffect(() => {
+      const sub = form.watch((values) => {
+        // Avoid saving empty form
+        if (values.driverName || values.cityName || values.countryName) {
+          const toSave = { ...values };
+          // Convert dates to ISO for storage
+          if (toSave.tripStartDate instanceof Date) toSave.tripStartDate = toSave.tripStartDate.toISOString();
+          if (toSave.tripEndDate instanceof Date) toSave.tripEndDate = toSave.tripEndDate.toISOString();
+          localStorage.setItem(DRAFT_KEY, JSON.stringify(toSave));
+        }
+      });
+      return () => sub.unsubscribe();
+    }, [form]);
+
 
     React.useImperativeHandle(ref, () => {
       return {
@@ -88,15 +128,92 @@ const TripDetailsForm = React.forwardRef<TripDetailsFormRef, TripDetailsFormProp
 
     async function onSubmit(values: TripDetailsFormData) {
       setIsSubmitting(true);
+      // Clear draft on successful submit
+      if (typeof window !== "undefined") {
+        localStorage.removeItem(DRAFT_KEY);
+      }
       onDetailsSubmit(values); 
       toast({
         title: "تم تحديث بيانات الرحلة مؤقتًا",
-        description: `تم تحديث بيانات رحلة السائق ${values.driverName} محليًا. اضغط "حفظ الرحلة بالكامل" في الأسفل لحفظ كل شيء.`,
+        description: `تم تحديث بيانات رحلة السائق ${values.driverName} محليًا. اضغط \"حفظ الرحلة بالكامل\" في الأسفل لحفظ كل شيء.`,
       });
       setIsSubmitting(false);
     }
 
+    // Helper: scroll to first error on submit
+    const scrollToFirstError = React.useCallback(() => {
+      const errorKeys = Object.keys(form.formState.errors);
+      if (errorKeys.length > 0) {
+        const el = document.querySelector(`[name='${errorKeys[0]}']`);
+        if (el && typeof (el as any).scrollIntoView === "function") {
+          (el as any).scrollIntoView({ behavior: "smooth", block: "center" });
+          (el as HTMLElement).focus();
+        }
+      }
+    }, [form.formState.errors]);
+
+    // Keyboard shortcuts
+    useHotkeys(
+      'enter',
+      (e) => {
+        // Only submit if focus is inside the form
+        if (document.activeElement && (document.activeElement as HTMLElement).form) {
+          e.preventDefault();
+          form.handleSubmit(onSubmit)();
+        }
+      },
+      { enableOnFormTags: true },
+      [form]
+    );
+    useHotkeys(
+      'esc',
+      (e) => {
+        e.preventDefault();
+        if (onCancelEdit) {
+          onCancelEdit();
+        } else {
+          form.reset();
+        }
+      },
+      { enableOnFormTags: true },
+      [form, onCancelEdit]
+    );
+
+    // Live summary values
+    const driverName = form.watch("driverName");
+    const cityName = form.watch("cityName");
+    const countryName = form.watch("countryName");
+    const tripStartDate = form.watch("tripStartDate");
+    const tripEndDate = form.watch("tripEndDate");
+
+    function formatDate(date: Date | string | undefined) {
+      if (!date) return "-";
+      try {
+        const d = typeof date === "string" ? new Date(date) : date;
+        return d.toLocaleDateString("ar-EG");
+      } catch { return "-"; }
+    }
+
     return (
+      <>
+        {React.useMemo(() => (
+          <Card className="mb-4 bg-blue-50 dark:bg-zinc-800 border-blue-200 dark:border-zinc-700 text-blue-900 dark:text-blue-100" aria-hidden="true" tabIndex={-1}>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base font-semibold">ملخص الرحلة الحالي</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-1 text-sm">
+              <div><span className="font-medium">السائق:</span> {driverName || <span className="text-gray-400">غير محدد</span>}</div>
+              <div>
+                <span className="font-medium">الوجهة:</span> {destinationType === DestinationType.INTERNAL ? (cityName || <span className="text-gray-400">مدينة غير محددة</span>) : (countryName || <span className="text-gray-400">بلد غير محدد</span>)}
+              </div>
+              <div>
+                <span className="font-medium">تاريخ البدء:</span> {formatDate(tripStartDate)}
+                <span className="mx-2">|</span>
+                <span className="font-medium">تاريخ النهاية:</span> {formatDate(tripEndDate)}
+              </div>
+            </CardContent>
+          </Card>
+        ), [driverName, destinationType, cityName, countryName, tripStartDate, tripEndDate])}
       <Card className="shadow-lg no-print">
         <CardHeader>
           <CardTitle>بيانات الرحلة</CardTitle>
@@ -104,16 +221,19 @@ const TripDetailsForm = React.forwardRef<TripDetailsFormRef, TripDetailsFormProp
         </CardHeader>
         <CardContent>
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            <form onSubmit={form.handleSubmit(onSubmit, scrollToFirstError)} className="space-y-6">
               <FormField
                 control={form.control}
                 name="driverName"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>اسم السائق</FormLabel>
-                    <FormControl>
-                      <Input placeholder="ادخل اسم السائق" {...field} />
-                    </FormControl>
+                    <FormLabel>
+  اسم السائق
+  {form.formState.errors.driverName && <FormErrorIcon />}
+</FormLabel>
+                       <FormControl>
+                         <Input placeholder="ادخل اسم السائق" aria-label="اسم السائق" {...field} />
+                       </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -125,7 +245,10 @@ const TripDetailsForm = React.forwardRef<TripDetailsFormRef, TripDetailsFormProp
                   name="tripStartDate"
                   render={({ field }) => (
                     <FormItem className="flex flex-col">
-                      <FormLabel>تاريخ بدء الرحلة</FormLabel>
+                      <FormLabel>
+  تاريخ بدء الرحلة
+  {form.formState.errors.tripStartDate && <FormErrorIcon />}
+</FormLabel>
                       <FormControl>
                         <DatePicker date={field.value} setDate={field.onChange} />
                       </FormControl>
@@ -138,7 +261,10 @@ const TripDetailsForm = React.forwardRef<TripDetailsFormRef, TripDetailsFormProp
                   name="tripEndDate"
                   render={({ field }) => (
                     <FormItem className="flex flex-col">
-                      <FormLabel>تاريخ نهاية الرحلة</FormLabel>
+                      <FormLabel>
+  تاريخ نهاية الرحلة
+  {form.formState.errors.tripEndDate && <FormErrorIcon />}
+</FormLabel>
                       <FormControl>
                         <DatePicker date={field.value} setDate={field.onChange} />
                       </FormControl>
@@ -153,7 +279,10 @@ const TripDetailsForm = React.forwardRef<TripDetailsFormRef, TripDetailsFormProp
                 name="destinationType"
                 render={({ field }) => (
                   <FormItem className="space-y-3">
-                    <FormLabel>الوجهة</FormLabel>
+                    <FormLabel>
+  الوجهة
+  {form.formState.errors.destinationType && <FormErrorIcon />}
+</FormLabel>
                     <FormControl>
                       <RadioGroup
                         onValueChange={(value) => {
@@ -194,9 +323,19 @@ const TripDetailsForm = React.forwardRef<TripDetailsFormRef, TripDetailsFormProp
                   name="cityName"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>اسم المدينة</FormLabel>
+                      <FormLabel>
+  اسم المدينة
+  {form.formState.errors.cityName && <FormErrorIcon />}
+</FormLabel>
                       <FormControl>
-                        <Input placeholder="ادخل اسم المدينة" {...field} />
+                        <AutocompleteInput
+                          placeholder="ادخل اسم المدينة"
+                          aria-label="اسم المدينة"
+                          suggestions={["القاهرة", "الإسكندرية", "أسوان", "الأقصر", "الغردقة", "شرم الشيخ", "المنصورة", "الفيوم", "سوهاج", "دمياط", "طنطا", "أسيوط", "الزقازيق", "دمنهور"]}
+                          {...field}
+                          value={field.value || ""}
+                          onChange={e => field.onChange(e.target.value)}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -210,9 +349,19 @@ const TripDetailsForm = React.forwardRef<TripDetailsFormRef, TripDetailsFormProp
                   name="countryName"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>اسم البلد</FormLabel>
+                      <FormLabel>
+  اسم البلد
+  {form.formState.errors.countryName && <FormErrorIcon />}
+</FormLabel>
                       <FormControl>
-                        <Input placeholder="ادخل اسم البلد" {...field} />
+                        <AutocompleteInput
+                          placeholder="ادخل اسم البلد"
+                          aria-label="اسم البلد"
+                          suggestions={["مصر", "السعودية", "الإمارات", "الأردن", "الكويت", "قطر", "تركيا", "لبنان", "المغرب", "تونس", "الجزائر", "السودان", "اليمن", "عمان", "سوريا", "العراق"]}
+                          {...field}
+                          value={field.value || ""}
+                          onChange={e => field.onChange(e.target.value)}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -220,6 +369,23 @@ const TripDetailsForm = React.forwardRef<TripDetailsFormRef, TripDetailsFormProp
                 />
               )}
               
+              <hr className="my-4 border-blue-200 dark:border-zinc-700" />
+              <div>
+                <label className="block mb-1 font-semibold text-blue-900 dark:text-blue-100">المرفقات</label>
+                <FileUpload
+                  label="إرفاق مستندات أو صور (اختياري)"
+                  multiple
+                  accept="image/*,application/pdf"
+                  onFilesChange={(files) => setAttachedFiles(files)}
+                  value={attachedFiles}
+                  aria-label="إرفاق مستندات أو صور"
+                />
+                {isSubmitting && (
+                  <div className="flex items-center gap-2 mt-2 text-blue-600 dark:text-blue-200 text-xs">
+                    <Loader2 className="animate-spin w-4 h-4" /> جاري رفع الملفات...
+                  </div>
+                )}
+              </div>
               <Button type="submit" className="w-full" disabled={isSubmitting}>
                 {isSubmitting && <Loader2 className="ms-2 h-4 w-4 animate-spin" />}
                 تحديث بيانات الرحلة (مؤقتًا)
@@ -228,6 +394,7 @@ const TripDetailsForm = React.forwardRef<TripDetailsFormRef, TripDetailsFormProp
           </Form>
         </CardContent>
       </Card>
+      </>
     );
   }
 );

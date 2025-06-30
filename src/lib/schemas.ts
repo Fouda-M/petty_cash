@@ -28,22 +28,25 @@ export const tripDetailsSchema = z.object({
 }, {
   message: "تاريخ نهاية الرحلة يجب أن يكون بعد أو نفس تاريخ البدء.",
   path: ["tripEndDate"],
-}).refine(data => {
+}).superRefine((data, ctx) => {
   if (data.destinationType === DestinationType.EXTERNAL) {
-    return !!data.countryName && data.countryName.trim().length > 0;
+    if (!data.countryName || data.countryName.trim().length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "اسم البلد مطلوب للوجهات الخارجية.",
+        path: ["countryName"],
+      });
+    }
   }
-  return true;
-}, {
-  message: "اسم البلد مطلوب للوجهات الخارجية.",
-  path: ["countryName"],
-}).refine(data => {
   if (data.destinationType === DestinationType.INTERNAL) {
-    return !!data.cityName && data.cityName.trim().length > 0;
+    if (!data.cityName || data.cityName.trim().length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "اسم المدينة مطلوب للوجهات الداخلية.",
+        path: ["cityName"],
+      });
+    }
   }
-  return true;
-}, {
-  message: "اسم المدينة مطلوب للوجهات الداخلية.",
-  path: ["cityName"],
 });
 
 export type TripDetailsFormData = z.infer<typeof tripDetailsSchema>;

@@ -13,6 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import type { Transaction } from "@/types";
+import { FixedSizeList, ListChildComponentProps } from "react-window";
 import { TransactionType, Currency } from "@/types";
 import { getCurrencyInfo, CURRENCIES_INFO, getTransactionTypeInfo, TRANSACTION_TYPES_INFO } from "@/lib/constants";
 import { format, parseISO } from "date-fns";
@@ -409,29 +410,66 @@ export default function TransactionTable({ transactions, onDeleteTransaction, on
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredAndSortedTransactions.map((transaction) => (
-                <TableRow key={transaction.id}>
-                  <TableCell className="text-start whitespace-nowrap">{format(new Date(transaction.date), "PP", { locale: arSA })}</TableCell>
-                  <TableCell className="text-start whitespace-nowrap">{getTransactionTypeName(transaction.type)}</TableCell>
-                  <TableCell className="font-medium text-start">{transaction.description}</TableCell>
-                  <TableCell className="text-end whitespace-nowrap">{formatCurrency(transaction.amount, transaction.currency)}</TableCell>
-                  <TableCell className="text-start whitespace-nowrap">{getCurrencyInfo(transaction.currency)?.name || transaction.currency}</TableCell>
-                  <TableCell className="text-end space-x-1 whitespace-nowrap">
-                    <Button variant="ghost" size="icon" onClick={() => onEditTransactionRequest(transaction)} aria-label="تعديل المعاملة">
-                      <Pencil className="h-4 w-4 text-blue-500" />
-                    </Button>
-                    <Button variant="ghost" size="icon" onClick={() => onDeleteTransaction(transaction.id)} aria-label="حذف المعاملة">
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {filteredAndSortedTransactions.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
-                    لا توجد معاملات تطابق معايير التصفية الحالية.
-                  </TableCell>
-                </TableRow>
+              {filteredAndSortedTransactions.length > 100 ? (
+                <FixedSizeList
+                  height={450}
+                  itemCount={filteredAndSortedTransactions.length}
+                  itemSize={48}
+                  width="100%"
+                  itemData={{
+                    transactions: filteredAndSortedTransactions,
+                    onEditTransactionRequest,
+                    onDeleteTransaction,
+                  }}
+                >
+                  {({ index, style, data }: ListChildComponentProps) => {
+                    const transaction = data.transactions[index];
+                    return (
+                      <TableRow key={transaction.id} style={style}>
+                        <TableCell className="text-start whitespace-nowrap">{format(new Date(transaction.date), "PP", { locale: arSA })}</TableCell>
+                        <TableCell className="text-start whitespace-nowrap">{getTransactionTypeName(transaction.type)}</TableCell>
+                        <TableCell className="font-medium text-start">{transaction.description}</TableCell>
+                        <TableCell className="text-end whitespace-nowrap">{formatCurrency(transaction.amount, transaction.currency)}</TableCell>
+                        <TableCell className="text-start whitespace-nowrap">{getCurrencyInfo(transaction.currency)?.name || transaction.currency}</TableCell>
+                        <TableCell className="text-end space-x-1 whitespace-nowrap">
+                          <Button variant="ghost" size="icon" onClick={() => data.onEditTransactionRequest(transaction)} aria-label="تعديل المعاملة">
+                            <Pencil className="h-4 w-4 text-blue-500" />
+                          </Button>
+                          <Button variant="ghost" size="icon" onClick={() => data.onDeleteTransaction(transaction.id)} aria-label="حذف المعاملة">
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  }}
+                </FixedSizeList>
+              ) : (
+                <>
+                  {filteredAndSortedTransactions.map((transaction) => (
+                    <TableRow key={transaction.id}>
+                      <TableCell className="text-start whitespace-nowrap">{format(new Date(transaction.date), "PP", { locale: arSA })}</TableCell>
+                      <TableCell className="text-start whitespace-nowrap">{getTransactionTypeName(transaction.type)}</TableCell>
+                      <TableCell className="font-medium text-start">{transaction.description}</TableCell>
+                      <TableCell className="text-end whitespace-nowrap">{formatCurrency(transaction.amount, transaction.currency)}</TableCell>
+                      <TableCell className="text-start whitespace-nowrap">{getCurrencyInfo(transaction.currency)?.name || transaction.currency}</TableCell>
+                      <TableCell className="text-end space-x-1 whitespace-nowrap">
+                        <Button variant="ghost" size="icon" onClick={() => onEditTransactionRequest(transaction)} aria-label="تعديل المعاملة">
+                          <Pencil className="h-4 w-4 text-blue-500" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => onDeleteTransaction(transaction.id)} aria-label="حذف المعاملة">
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {filteredAndSortedTransactions.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                        لا توجد معاملات تطابق معايير التصفية الحالية.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </>
               )}
             </TableBody>
           </Table>

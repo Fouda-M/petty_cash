@@ -43,13 +43,12 @@ interface AddTransactionFormProps {
 const getBaseFormValues = (): Omit<TransactionFormData, 'date' | 'amount'> & { date?: Date, amount: undefined | number } => ({
   type: TransactionType.EXPENSE,
   description: "",
-  amount: undefined, // Critical for controlled input: initialize as undefined or '' for number inputs
+  amount: undefined,
   currency: CURRENCIES_INFO[0].code,
-  date: undefined, // Hydration-safe initial value for date
+  date: undefined,
 });
 
-
-export default function AddTransactionForm({
+function AddTransactionForm({
   onTransactionAdded,
   transactionToEdit,
   onTransactionUpdated,
@@ -63,6 +62,8 @@ export default function AddTransactionForm({
 
   const form = useForm<TransactionFormData>({
     resolver: zodResolver(transactionSchema),
+    mode: "onChange",
+    reValidateMode: "onChange",
     defaultValues: transactionToEdit
       ? { // Editing existing transaction
           ...transactionToEdit,
@@ -174,7 +175,7 @@ export default function AddTransactionForm({
 
   const formContent = (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+      <form onSubmit={form.handleSubmit(onSubmit)} onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); } }} className="space-y-6">
         <FormField
           control={form.control}
           name="type"
@@ -316,3 +317,4 @@ export default function AddTransactionForm({
   );
 }
 
+export default React.memo(AddTransactionForm);

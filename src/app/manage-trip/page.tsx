@@ -13,6 +13,7 @@ import type { Transaction, ExchangeRates } from "@/types";
 import type { TripDetailsFormData } from "@/lib/schemas";
 import { TransactionType, Currency } from "@/types";
 import { useToast } from "@/hooks/use-toast";
+import { useHotkeys } from 'react-hotkeys-hook';
 import { Button } from "@/components/ui/button";
 import { Printer, Settings, ArrowRight, Save, ListChecks, Loader2, Edit } from "lucide-react";
 import { DEFAULT_EXCHANGE_RATES_TO_EGP, loadExchangeRates as loadRatesFromLocal, saveExchangeRates as saveRatesToLocal } from "@/lib/exchangeRates";
@@ -21,6 +22,8 @@ import Link from "next/link";
 import { supabase } from '@/lib/supabase/client';
 import type { User } from "@supabase/supabase-js";
 import { cn } from "@/lib/utils";
+import TransactionFiltersSheet from "@/components/filters/TransactionFiltersSheet";
+import type { TransactionFilters } from "@/hooks/useTransactions";
 
 import {
   Dialog,
@@ -62,15 +65,30 @@ function ManageTripPageContent({ isGuest: propIsGuest }: ManageTripPageContentPr
   const [isSavingFullTrip, setIsSavingFullTrip] = React.useState(false);
   const [reportDataForPrint, setReportDataForPrint] = React.useState<ReportDataPayload | null>(null);
 
+  // Local filter state
+  const [filters, setFilters] = React.useState<TransactionFilters>({});
+  const filteredTransactions = React.useMemo(() => {
+    return transactions.filter((t) => {
+      if (filters.startDate && new Date(t.date) < new Date(filters.startDate)) return false;
+      if (filters.endDate && new Date(t.date) > new Date(filters.endDate)) return false;
+      if (filters.search && !t.description?.includes(filters.search)) return false;
+      return true;
+    });
+  }, [transactions, filters]);
+
+  // Keyboard shortcut: Ctrl+S / Cmd+S to save trip
+  useHotkeys('ctrl+s,meta+s', (e) => {
+    e.preventDefault();
+    handleSaveFullTrip();
+  }, [currentTripDetails, transactions, exchangeRates, isSavingFullTrip, isGuestMode, user]);
+
   React.useEffect(() => {
     let isMounted = true;
-    console.log("[ManageTripPage Debug] Main useEffect triggered. searchParams:", searchParams.toString(), "propIsGuest:", propIsGuest);
     setIsLoadingPage(true);
 
     const initializePage = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       const activeUser = session?.user ?? null;
-      
       let activeGuestMode = propIsGuest !== undefined ? propIsGuest : (typeof window !== 'undefined' && sessionStorage.getItem('isGuest') === 'true');
       if (activeUser && activeGuestMode) {
           activeGuestMode = false;
@@ -80,7 +98,6 @@ function ManageTripPageContent({ isGuest: propIsGuest }: ManageTripPageContentPr
       if (isMounted) {
         setUser(activeUser);
         setIsGuestMode(activeGuestMode);
-        console.log("[ManageTripPage Debug] User set to:", activeUser, "Guest mode set to:", activeGuestMode);
       }
 
       if (!activeUser && !activeGuestMode) {
@@ -92,12 +109,26 @@ function ManageTripPageContent({ isGuest: propIsGuest }: ManageTripPageContentPr
         return;
       }
 
+      const isNewTrip = searchParams.get('new') === 'true';
       const tripIdToEditParam = searchParams.get('edit');
-      setEditingTripId(tripIdToEditParam); // Set editingTripId based on URL param
-      console.log("[ManageTripPage Debug] tripIdToEditParam from URL:", tripIdToEditParam);
 
-      if (tripIdToEditParam && !activeGuestMode && activeUser) {
-        console.log(`[ManageTripPage Debug] Attempting to load trip ID: ${tripIdToEditParam} for editing.`);
+      // Priority 1: New Trip Creation
+      if (isNewTrip) {
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('tripDraft');
+        }
+        if (isMounted) {
+          setCurrentTripDetails(null);
+          setTransactions([]);
+          setExchangeRates(loadRatesFromLocal());
+          setEditingTripId(null);
+          tripDetailsFormRef.current?.resetForm(null);
+          router.replace('/manage-trip', undefined);
+        }
+      } 
+      // Priority 2: Editing an Existing Trip
+      else if (tripIdToEditParam && !activeGuestMode && activeUser) {
+        setEditingTripId(tripIdToEditParam);
         try {
           const { data: tripToLoad, error: fetchError } = await supabase
             .from('trips')
@@ -107,77 +138,74 @@ function ManageTripPageContent({ isGuest: propIsGuest }: ManageTripPageContentPr
             .single();
 
           if (fetchError && isMounted) {
-            toast({ variant: "destructive", title: "خطأ في تحميل الرحلة", description: `لم يتم العثور على الرحلة أو حدث خطأ: ${fetchError.message}. سيتم بدء رحلة جديدة.` });
-            if (isMounted) {
-                setCurrentTripDetails(null);
-                setTransactions([]);
-                setExchangeRates(loadRatesFromLocal());
-                tripDetailsFormRef.current?.resetForm(null);
-                // setEditingTripId(null); // Already set from searchParams or null
-                 router.replace('/manage-trip', undefined); // Clear 'edit' param
-                console.log("[ManageTripPage Debug] Error loading edit trip, defaulted to new trip state.");
-            }
+            toast({ variant: "destructive", title: "خطأ في تحميل الرحلة", description: `لم يتم العثور على الرحلة أو حدث خطأ. سيتم بدء رحلة جديدة.` });
+            setCurrentTripDetails(null);
+            setTransactions([]);
+            tripDetailsFormRef.current?.resetForm(null);
+            router.replace('/manage-trip', undefined);
           } else if (tripToLoad && isMounted) {
             const tripData = tripToLoad as any;
             const details = tripData.details;
-             if (details && details.tripStartDate && details.tripEndDate) {
+            if (details && details.tripStartDate && details.tripEndDate) {
                 const loadedTripDetails: TripDetailsFormData = { ...details, tripStartDate: new Date(details.tripStartDate), tripEndDate: new Date(details.tripEndDate) };
                 setCurrentTripDetails(loadedTripDetails);
-                if (tripDetailsFormRef.current) tripDetailsFormRef.current.resetForm(loadedTripDetails);
-            } else {
-                 setCurrentTripDetails(null);
-                 if (tripDetailsFormRef.current) tripDetailsFormRef.current.resetForm(null);
+                tripDetailsFormRef.current?.resetForm(loadedTripDetails);
             }
             const rawTransactions = Array.isArray(tripData.transactions) ? tripData.transactions : [];
-            const parsedTransactions = rawTransactions.map((t: Transaction) => ({ ...t, id: t.id || crypto.randomUUID(), date: new Date(t.date), amount: Number(t.amount) || 0, type: t.type as TransactionType })).sort((a: Transaction, b: Transaction) => new Date(b.date).getTime() - new Date(a.date).getTime());
-            setTransactions(parsedTransactions.sort((a: Transaction, b: Transaction) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+            const parsedTransactions = rawTransactions.map((t: Transaction) => ({ ...t, date: new Date(t.date) })).sort((a: Transaction, b: Transaction) => new Date(b.date).getTime() - new Date(a.date).getTime());
+            setTransactions(parsedTransactions);
             setExchangeRates(tripData.exchange_rates || loadRatesFromLocal());
-            toast({ title: "تم تحميل الرحلة للتعديل", description: `يتم الآن تعديل رحلة: ${tripData.name || 'غير مسماة'}` });
-            console.log("[ManageTripPage Debug] Successfully loaded trip for editing. Transactions count:", parsedTransactions.length);
-          } else if (isMounted) { 
-            toast({ variant: "destructive", title: "خطأ", description: "لم يتم العثور على الرحلة المطلوبة للتعديل. سيتم بدء رحلة جديدة." });
-             if (isMounted) {
-                setCurrentTripDetails(null);
-                setTransactions([]);
-                setExchangeRates(loadRatesFromLocal());
-                if (tripDetailsFormRef.current) tripDetailsFormRef.current.resetForm(null);
-                // setEditingTripId(null); // Already set from searchParams or null
-                 router.replace('/manage-trip', undefined); // Clear 'edit' param
-                console.log("[ManageTripPage Debug] Trip to edit not found (or other issue), defaulted to new trip state.");
-            }
+            toast({ title: "تم تحميل الرحلة للتعديل" });
           }
         } catch (error: any) {
           if (isMounted) {
-            toast({ variant: "destructive", title: "خطأ في تحميل الرحلة", description: `حدث خطأ: ${error.message}. سيتم بدء رحلة جديدة.` });
-            if (isMounted) {
-                setCurrentTripDetails(null);
-                setTransactions([]);
-                setExchangeRates(loadRatesFromLocal());
-                if (tripDetailsFormRef.current) tripDetailsFormRef.current.resetForm(null);
-                // setEditingTripId(null); // Already set from searchParams or null
-                 router.replace('/manage-trip', undefined); // Clear 'edit' param
-                console.log("[ManageTripPage Debug] Exception during loading edit trip, defaulted to new trip state.");
-            }
+            toast({ variant: "destructive", title: "خطأ في تحميل الرحلة", description: "حدث خطأ غير متوقع. سيتم بدء رحلة جديدة." });
+            router.replace('/manage-trip', undefined);
           }
         }
-      } else { 
-        if (isMounted) {
-            console.log("[ManageTripPage Debug] Initializing for new trip or guest mode.");
+      } 
+      // Priority 3: Load from Draft or Start Fresh
+      else {
+        setEditingTripId(null);
+        try {
+          const savedDraftRaw = localStorage.getItem('tripDraft');
+          if (savedDraftRaw) {
+            const savedDraft = JSON.parse(savedDraftRaw);
+            if (isMounted) {
+              const details = savedDraft.tripDetails;
+              if (details && details.tripStartDate && details.tripEndDate) {
+                const loadedTripDetails: TripDetailsFormData = { ...details, tripStartDate: new Date(details.tripStartDate), tripEndDate: new Date(details.tripEndDate) };
+                setCurrentTripDetails(loadedTripDetails);
+                tripDetailsFormRef.current?.resetForm(loadedTripDetails);
+              }
+              const rawTransactions = Array.isArray(savedDraft.transactions) ? savedDraft.transactions : [];
+              const parsedTransactions = rawTransactions.map((t: Transaction) => ({ ...t, date: new Date(t.date) })).sort((a: Transaction, b: Transaction) => new Date(b.date).getTime() - new Date(a.date).getTime());
+              setTransactions(parsedTransactions);
+              setExchangeRates(savedDraft.exchangeRates || loadRatesFromLocal());
+              toast({ title: "تم استعادة مسودة رحلة", description: "تم تحميل آخر مسودة غير محفوظة." });
+            }
+          } else {
+            // Start completely fresh if no draft
+            if (isMounted) {
+              setCurrentTripDetails(null);
+              setTransactions([]);
+              setExchangeRates(loadRatesFromLocal());
+              tripDetailsFormRef.current?.resetForm(null);
+            }
+          }
+        } catch (e) {
+          // If draft is corrupted, start fresh
+          if (isMounted) {
             setCurrentTripDetails(null);
             setTransactions([]);
-            setExchangeRates(loadRatesFromLocal()); // Use default local rates for new/guest
-            if (tripDetailsFormRef.current) tripDetailsFormRef.current.resetForm(null);
-            // setEditingTripId(null); // Already set from searchParams or null
-            if (!activeGuestMode && activeUser && searchParams.get('edit')) { 
-                 router.replace('/manage-trip', undefined); // Clear 'edit' param only if it was for a logged-in user
-            }
-            console.log("[ManageTripPage Debug] New trip state initialized.");
+            setExchangeRates(loadRatesFromLocal());
+            tripDetailsFormRef.current?.resetForm(null);
+          }
         }
       }
       
       if (isMounted) {
         setIsLoadingPage(false);
-        console.log("[ManageTripPage Debug] Page loading finished.");
       }
     };
 
@@ -185,9 +213,31 @@ function ManageTripPageContent({ isGuest: propIsGuest }: ManageTripPageContentPr
 
     return () => { 
       isMounted = false;
-      console.log("[ManageTripPage Debug] Component unmounted or useEffect re-ran.");
     };
-  }, [searchParams, propIsGuest, router, toast]); // Dependencies
+  }, [searchParams, propIsGuest, router, toast]);
+
+  // Auto-save trip draft to localStorage
+  React.useEffect(() => {
+    // Do not save draft if page is loading, in guest mode, or editing a trip from the server
+    if (isLoadingPage || isGuestMode || editingTripId) {
+      return;
+    }
+
+    const handler = setTimeout(() => {
+      if (currentTripDetails || transactions.length > 0) {
+        const draft = {
+          tripDetails: currentTripDetails,
+          transactions: transactions,
+          exchangeRates: exchangeRates
+        };
+        localStorage.setItem('tripDraft', JSON.stringify(draft));
+      }
+    }, 1000); // Debounce saving
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [currentTripDetails, transactions, exchangeRates, editingTripId, isGuestMode, isLoadingPage]);
 
 
   const handleTripDetailsUpdate = (details: TripDetailsFormData) => {
@@ -266,7 +316,7 @@ function ManageTripPageContent({ isGuest: propIsGuest }: ManageTripPageContentPr
 
   const handleSaveFullTrip = async () => {
     if (isGuestMode) {
-        toast({ variant: "destructive", title: "غير مسموح", description: "لحفظ الرحلات على الخادم، يرجى تسجيل الدخول أو إنشاء حساب." });
+        toast({ variant: "destructive", title: "غير مسموح به", description: "لحفظ الرحلات على الخادم، يرجى تسجيل الدخول أو إنشاء حساب." });
         return;
     }
     if (!user) {
@@ -377,10 +427,12 @@ function ManageTripPageContent({ isGuest: propIsGuest }: ManageTripPageContentPr
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start no-print">
         <div className="lg:col-span-1 space-y-8">
           <AddTransactionForm onTransactionAdded={handleAddTransaction} transactionToEdit={transactionToEdit} onTransactionUpdated={handleTransactionUpdated} onCancelEdit={handleCloseEditModal} />
-          <BalanceSummary transactions={transactions} exchangeRates={exchangeRates} />
+          <TransactionFiltersSheet filters={filters} onChange={setFilters} />
+          <BalanceSummary transactions={filteredTransactions} exchangeRates={exchangeRates} />
+          
         </div>
         <div className="lg:col-span-2">
-          <TransactionTable transactions={transactions} onDeleteTransaction={handleDeleteTransaction} onEditTransactionRequest={handleOpenEditModal} />
+          <TransactionTable transactions={filteredTransactions} onDeleteTransaction={handleDeleteTransaction} onEditTransactionRequest={handleOpenEditModal} />
         </div>
       </div>
 

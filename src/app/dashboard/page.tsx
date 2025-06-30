@@ -180,7 +180,7 @@ export default function DashboardPage() {
           ابدأ الآن:
         </p>
  <div className="flex flex-col sm:flex-row gap-4 justify-center">
- <Link href="/manage-trip">
+ <Link href="/manage-trip?new=true" passHref>
             <Button size="lg" className="w-full sm:w-auto text-lg py-7 px-8 shadow-lg hover:shadow-xl transition-shadow">
               <PlusCircle className="ms-2 h-6 w-6" />
               {isGuestMode ? "تجربة تسجيل رحلة" : "تسجيل رحلة جديدة"}

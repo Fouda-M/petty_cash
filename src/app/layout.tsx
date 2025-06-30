@@ -1,9 +1,9 @@
-
 "use client";
 
 import { GeistSans } from 'geist/font/sans';
-import './globals.css';
+import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
+import Providers from "./providers";
 import Logo from '@/components/shared/Logo';
 import { cn } from '@/lib/utils';
 import CurrentYear from '@/components/shared/CurrentYear';
@@ -14,6 +14,7 @@ import type { User } from '@supabase/supabase-js';
 import { Button } from '@/components/ui/button';
 import { useRouter } from 'next/navigation';
 import { LogOut, UserCircle2, UserX2 } from 'lucide-react';
+import ThemeToggle from "@/components/ui/ThemeToggle";
 
 const geistSans = GeistSans;
 
@@ -110,8 +111,8 @@ export default function RootLayout({
   return (
     <html lang="ar" dir="rtl" suppressHydrationWarning>
       <head>
-          <title>عهدة</title>
-          <meta name="description" content="تتبع المعاملات المالية بعملات متعددة." />
+        <title>عهدة</title>
+        <meta name="description" content="تتبع المعاملات المالية بعملات متعددة." />
       </head>
       <body
         className={cn(
@@ -120,63 +121,68 @@ export default function RootLayout({
         )}
         suppressHydrationWarning={true}
       >
-        <div className="flex flex-col min-h-screen">
-          <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 no-print">
-            <div className="container flex h-16 items-center justify-between">
-              <Link href={dashboardLink}>
-                <Logo />
-              </Link>
-              <div className="flex items-center gap-3">
-                {isLoadingAuth ? (
-                    <div className="text-sm text-muted-foreground">جارٍ التحميل...</div>
-                ) : isGuest ? (
-                  <>
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                       <UserX2 className="h-5 w-5 text-primary" />
-                       <span>وضع الضيف</span>
-                    </div>
-                    <Button variant="outline" size="sm" onClick={handleLoginRedirect}>
-                      تسجيل الدخول / إنشاء حساب
- </Button>
-                  </>
-                ) : user ? (
-                  <>
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                       <UserCircle2 className="h-5 w-5 text-primary" />
-                       <span>{user.email}</span>
-                    </div>
-                    <Button variant="outline" size="sm" onClick={handleLogout}>
-                      <LogOut className="ms-1.5 h-4 w-4" />
-                      تسجيل الخروج
-                    </Button>
-                  </>
-                ) : ( 
-                  <Link href="/">
-                     <Button variant="outline" size="sm">
-                        تسجيل الدخول
-                     </Button>
+        <Providers>
+          <div className="flex flex-col min-h-screen">
+            <header className="w-full border-b border-border bg-background/80 backdrop-blur sticky top-0 z-30">
+              <div className="container flex h-16 items-center justify-between gap-2 px-2">
+                <div className="flex items-center gap-2">
+                  <Link href={dashboardLink}>
+                    <Logo />
                   </Link>
-                )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <ThemeToggle />
+                  {isLoadingAuth ? (
+                    <div className="text-sm text-muted-foreground">جارٍ التحميل...</div>
+                  ) : isGuest ? (
+                    <>
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <UserX2 className="h-5 w-5 text-primary" />
+                        <span>وضع الضيف</span>
+                      </div>
+                      <Button variant="outline" size="sm" onClick={handleLoginRedirect}>
+                        تسجيل الدخول / إنشاء حساب
+                      </Button>
+                    </>
+                  ) : user ? (
+                    <>
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <UserCircle2 className="h-5 w-5 text-primary" />
+                        <span>{user.email}</span>
+                      </div>
+                      <Button variant="outline" size="sm" onClick={handleLogout}>
+                        <LogOut className="ms-1.5 h-4 w-4" />
+                        تسجيل الخروج
+                      </Button>
+                    </>
+                  ) : (
+                    <Link href="/">
+                      <Button variant="outline" size="sm">
+                        تسجيل الدخول
+                      </Button>
+                    </Link>
+                  )}
+                </div>
               </div>
-            </div>
-          </header>
-          <main className="flex-1">
-            {React.Children.map(children, child => {
+            </header>
+            <main className="flex-1">
+              {React.Children.map(children, child => {
                 if (React.isValidElement(child)) {
-                    return React.cloneElement(child as React.ReactElement<any>, { isGuest });
+                  return React.cloneElement(child as React.ReactElement<any>, { isGuest });
                 }
                 return child;
-            })}
-          </main>
-          <footer className="py-6 md:px-8 md:py-0 border-t no-print">
-            <div className="container flex flex-col items-center justify-center gap-4 md:h-24 md:flex-row">
-              <p className="text-sm leading-loose text-center text-muted-foreground">
-                © <CurrentYear /> عهدة. جميع الحقوق محفوظة.
-              </p>
-            </div>
-          </footer>
-        </div>
-        <Toaster />
+              })}
+            </main>
+            <footer className="py-6 md:px-8 md:py-0 border-t no-print">
+              <div className="container flex flex-col items-center justify-center gap-4 md:h-24 md:flex-row">
+                <p className="text-sm leading-loose text-center text-muted-foreground">
+                  &copy; <CurrentYear /> عهدة. جميع الحقوق محفوظة.
+                </p>
+              </div>
+            </footer>
+          </div>
+          <Toaster />
+        </Providers>
       </body>
     </html>
   );
