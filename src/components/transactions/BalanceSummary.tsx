@@ -1,10 +1,9 @@
-
 "use client";
 
 import * as React from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import type { Transaction, ExchangeRates } from "@/types";
-import { TransactionType } from "@/types";
+import { TransactionType, DestinationType } from "@/types";
 import { Currency, CONVERSION_TARGET_CURRENCIES, getCurrencyInfo } from "@/lib/constants";
 import { convertCurrency, getExchangeRate } from "@/lib/exchangeRates";
 import { cn } from "@/lib/utils";
@@ -13,7 +12,8 @@ import { Separator } from "@/components/ui/separator";
 
 interface BalanceSummaryProps {
   transactions: Transaction[];
-  exchangeRates: ExchangeRates; 
+  exchangeRates: ExchangeRates;
+  destinationType?: DestinationType;
 }
 
 interface TransactionDetail {
@@ -34,13 +34,22 @@ interface TripProfitLossDetails {
   driverFeeDetails: TransactionDetail[];
 }
 
+export default function BalanceSummary({ transactions, exchangeRates, destinationType }: BalanceSummaryProps) {
 
-export default function BalanceSummary({ transactions, exchangeRates }: BalanceSummaryProps) {
+  const currenciesToDisplay = React.useMemo(() => {
+    if (destinationType === DestinationType.INTERNAL) {
+      return [Currency.EGP];
+    }
+    if (destinationType === DestinationType.EXTERNAL) {
+      return [Currency.EGP, Currency.USD, Currency.AED];
+    }
+    return CONVERSION_TARGET_CURRENCIES;
+  }, [destinationType]);
 
   const tripProfitLossSummary = React.useMemo(() => {
     const summary: Record<Currency, TripProfitLossDetails> = {} as any;
 
-    CONVERSION_TARGET_CURRENCIES.forEach(targetCurrency => {
+    currenciesToDisplay.forEach(targetCurrency => {
       let totalConvertedRevenueAndClientCustody = 0;
       let totalConvertedExpenses = 0;
       let totalConvertedCustodyOwner = 0;
@@ -50,7 +59,6 @@ export default function BalanceSummary({ transactions, exchangeRates }: BalanceS
       const expenseDetailsForTarget: TransactionDetail[] = [];
       const custodyOwnerDetailsForTarget: TransactionDetail[] = [];
       const driverFeeDetailsForTarget: TransactionDetail[] = [];
-
 
       transactions.forEach(t => {
         const type = t.type;
@@ -92,8 +100,7 @@ export default function BalanceSummary({ transactions, exchangeRates }: BalanceS
       };
     });
     return summary;
-  }, [transactions, exchangeRates]);
-
+  }, [transactions, exchangeRates, currenciesToDisplay]);
 
   const formatCurrencyDisplay = (
     amount: number,
@@ -226,7 +233,7 @@ export default function BalanceSummary({ transactions, exchangeRates }: BalanceS
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        {CONVERSION_TARGET_CURRENCIES.map(targetCurrency => {
+        {currenciesToDisplay.map((targetCurrency) => {
           const details = tripProfitLossSummary[targetCurrency];
           if (!details) return null;
           const currencyInfo = getCurrencyInfo(targetCurrency);

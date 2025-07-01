@@ -26,7 +26,7 @@ import { addTransactionAction, updateTransactionAction } from "@/actions/transac
 import { transactionSchema, type TransactionFormData } from "@/lib/schemas";
 import { CURRENCIES_INFO, TRANSACTION_TYPES_INFO, getTransactionTypeInfo } from "@/lib/constants";
 import type { Transaction } from "@/types";
-import { TransactionType } from "@/types";
+import { TransactionType, Currency, DestinationType } from "@/types";
 import { Loader2 } from "lucide-react";
 import * as React from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -37,6 +37,7 @@ interface AddTransactionFormProps {
   onTransactionUpdated?: (updatedTransaction: Transaction) => void;
   onCancelEdit?: () => void;
   className?: string;
+  destinationType?: DestinationType;
 }
 
 // Provides base values for a new form, excluding date or with date explicitly undefined.
@@ -53,7 +54,8 @@ function AddTransactionForm({
   transactionToEdit,
   onTransactionUpdated,
   onCancelEdit,
-  className
+  className,
+  destinationType,
 }: AddTransactionFormProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
@@ -72,6 +74,19 @@ function AddTransactionForm({
         }
       : getBaseFormValues(), // New transaction: uses date: undefined from getBaseFormValues
   });
+
+  // Effect to dynamically set default currency based on destination
+  React.useEffect(() => {
+    // We only want to set the default currency for NEW transactions.
+    // Existing transactions should retain their saved currency.
+    if (!isEditMode) {
+      const newCurrency =
+        destinationType === DestinationType.INTERNAL
+          ? Currency.EGP // Set to EGP for internal trips
+          : CURRENCIES_INFO[0].code; // Default to USD for external trips
+      form.setValue("currency", newCurrency);
+    }
+  }, [destinationType, isEditMode, form]);
 
   // Effect to initialize or reset form based on mode (new/edit/cancel)
   // This runs client-side after the initial render.

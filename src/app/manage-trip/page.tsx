@@ -426,9 +426,9 @@ function ManageTripPageContent({ isGuest: propIsGuest }: ManageTripPageContentPr
       
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start no-print">
         <div className="lg:col-span-1 space-y-8">
-          <AddTransactionForm onTransactionAdded={handleAddTransaction} transactionToEdit={transactionToEdit} onTransactionUpdated={handleTransactionUpdated} onCancelEdit={handleCloseEditModal} />
+          <AddTransactionForm onTransactionAdded={handleAddTransaction} transactionToEdit={transactionToEdit} onTransactionUpdated={handleTransactionUpdated} onCancelEdit={handleCloseEditModal} destinationType={currentTripDetails?.destinationType} />
           <TransactionFiltersSheet filters={filters} onChange={setFilters} />
-          <BalanceSummary transactions={filteredTransactions} exchangeRates={exchangeRates} />
+          <BalanceSummary transactions={filteredTransactions} exchangeRates={exchangeRates} destinationType={currentTripDetails?.destinationType} />
           
         </div>
         <div className="lg:col-span-2">
@@ -453,7 +453,7 @@ function ManageTripPageContent({ isGuest: propIsGuest }: ManageTripPageContentPr
               <DialogTitle>تعديل المعاملة</DialogTitle>
               <DialogDescription> قم بتحديث تفاصيل معاملتك هنا. انقر على حفظ عند الانتهاء. </DialogDescription>
             </DialogHeader>
-            <AddTransactionForm transactionToEdit={transactionToEdit} onTransactionUpdated={handleTransactionUpdated} onCancelEdit={handleCloseEditModal} className="pt-4" />
+            <AddTransactionForm transactionToEdit={transactionToEdit} onTransactionUpdated={handleTransactionUpdated} onCancelEdit={handleCloseEditModal} className="pt-4" destinationType={currentTripDetails?.destinationType} />
           </DialogContent>
         </Dialog>
       )}
