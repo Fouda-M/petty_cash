@@ -39,9 +39,8 @@ export const AutocompleteInput = React.forwardRef<HTMLInputElement, Autocomplete
       setActive(-1);
       onSelectSuggestion?.(suggestion);
       props.onChange?.({
-        ...({} as React.ChangeEvent<HTMLInputElement>),
-        target: { value: suggestion }
-      });
+        target: { value: suggestion },
+      } as React.ChangeEvent<HTMLInputElement>);
     };
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -62,7 +61,7 @@ export const AutocompleteInput = React.forwardRef<HTMLInputElement, Autocomplete
         <Input
           {...props}
           ref={(node) => {
-            inputRef.current = node;
+            (inputRef as any).current = node;
             if (ref) {
               if (typeof ref === "function") ref(node);
               else (ref as React.MutableRefObject<HTMLInputElement | null>).current = node;

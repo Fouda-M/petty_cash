@@ -50,7 +50,7 @@ interface TransactionTableProps {
 type SortKey = keyof Transaction | 'none';
 type SortDirection = 'asc' | 'desc';
 
-export default function TransactionTable({ transactions, onDeleteTransaction, onEditTransactionRequest }: TransactionTableProps) {
+function TransactionTable({ transactions, onDeleteTransaction, onEditTransactionRequest }: TransactionTableProps) {
   const [sortKey, setSortKey] = React.useState<SortKey>('date');
   const [sortDirection, setSortDirection] = React.useState<SortDirection>('desc');
 
@@ -478,3 +478,5 @@ export default function TransactionTable({ transactions, onDeleteTransaction, on
     </Card>
   );
 }
+
+export default React.memo(TransactionTable);
