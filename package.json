@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "build:static": "next build",
+    "build:static": "next build && next export",
     "deploy": "npm run build:static && npx shx touch out/.nojekyll && gh-pages -d out --dotfiles",
     "fix-code": "npm uninstall @genkit-ai/core @genkit-ai/dotprompt && npm install --save-dev handlebars-loader",
     "clean-vercel": "rm -rf .vercel && rm -f vercel.json && sed -i '/vercel/d' .gitignore",

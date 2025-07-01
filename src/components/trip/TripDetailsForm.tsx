@@ -97,7 +97,7 @@ const TripDetailsForm = React.forwardRef<TripDetailsFormRef, TripDetailsFormProp
       const sub = form.watch((values) => {
         // Avoid saving empty form
         if (values.driverName || values.cityName || values.countryName) {
-          const toSave = { ...values };
+          const toSave: any = { ...values };
           // Convert dates to ISO for storage
           if (toSave.tripStartDate instanceof Date) toSave.tripStartDate = toSave.tripStartDate.toISOString();
           if (toSave.tripEndDate instanceof Date) toSave.tripEndDate = toSave.tripEndDate.toISOString();
@@ -157,7 +157,7 @@ const TripDetailsForm = React.forwardRef<TripDetailsFormRef, TripDetailsFormProp
       'enter',
       (e) => {
         // Only submit if focus is inside the form
-        if (document.activeElement && (document.activeElement as HTMLElement).form) {
+        if (document.activeElement && (document.activeElement as any)?.form) {
           e.preventDefault();
           form.handleSubmit(onSubmit)();
         }
