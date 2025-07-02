@@ -279,7 +279,7 @@ function AddTransactionForm({
                 {destinationType === DestinationType.INTERNAL ? (
                   <>
                     {/* Hidden input to keep form value */}
-                    <input type="hidden" value={Currency.EGP} {...field} />
+                    <input type="hidden" value={Currency.EGP} name={field.name} />
                     {/* Read-only display */}
                     <Input value="الجنيه المصري (ج.م)" disabled readOnly />
                   </>
