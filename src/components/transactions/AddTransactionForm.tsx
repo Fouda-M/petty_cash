@@ -75,18 +75,27 @@ function AddTransactionForm({
       : getBaseFormValues(), // New transaction: uses date: undefined from getBaseFormValues
   });
 
+  const availableCurrencies = React.useMemo(() => {
+    if (destinationType === DestinationType.INTERNAL) {
+      // For internal trips, only EGP is available.
+      return CURRENCIES_INFO.filter(c => c.code === Currency.EGP);
+    }
+    // For external trips, all currencies are available.
+    return CURRENCIES_INFO;
+  }, [destinationType]);
+
   // Effect to dynamically set default currency based on destination
   React.useEffect(() => {
-    // We only want to set the default currency for NEW transactions.
-    // Existing transactions should retain their saved currency.
-    if (!isEditMode) {
-      const newCurrency =
-        destinationType === DestinationType.INTERNAL
-          ? Currency.EGP // Set to EGP for internal trips
-          : CURRENCIES_INFO[0].code; // Default to USD for external trips
-      form.setValue("currency", newCurrency);
+    if (destinationType === DestinationType.INTERNAL) {
+      // For internal trips (new or existing form), force currency to EGP.
+      form.setValue("currency", Currency.EGP);
+    } else if (!isEditMode) {
+      // For NEW external trips, default to the first currency in the list (e.g., USD).
+      form.setValue("currency", CURRENCIES_INFO[0].code);
     }
-  }, [destinationType, isEditMode, form]);
+    // If it's an external trip being edited, we don't change the currency.
+    // The user can change it manually from the full list if needed.
+  }, [destinationType, isEditMode, form.setValue]);
 
   // Effect to initialize or reset form based on mode (new/edit/cancel)
   // This runs client-side after the initial render.
@@ -133,6 +142,10 @@ function AddTransactionForm({
   }, [selectedTransactionType]);
 
   async function onSubmit(values: TransactionFormData) {
+    // Force currency to EGP for internal trips, regardless of UI state
+    if (destinationType === DestinationType.INTERNAL) {
+      values.currency = Currency.EGP;
+    }
     setIsSubmitting(true);
     try {
       let result;
@@ -263,24 +276,33 @@ function AddTransactionForm({
             render={({ field }) => (
               <FormItem>
                 <FormLabel>العملة</FormLabel>
-                <Select
-                  onValueChange={field.onChange}
-                  value={field.value}
-                  dir="rtl"
-                >
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="اختر العملة" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {CURRENCIES_INFO.map((currencyInfo) => (
-                      <SelectItem key={currencyInfo.code} value={currencyInfo.code}>
-                        {currencyInfo.name} ({currencyInfo.symbol})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {destinationType === DestinationType.INTERNAL ? (
+                  <>
+                    {/* Hidden input to keep form value */}
+                    <input type="hidden" value={Currency.EGP} {...field} />
+                    {/* Read-only display */}
+                    <Input value="الجنيه المصري (ج.م)" disabled readOnly />
+                  </>
+                ) : (
+                  <Select
+                    onValueChange={field.onChange}
+                    value={field.value}
+                    dir="rtl"
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="اختر العملة" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {availableCurrencies.map((currencyInfo) => (
+                        <SelectItem key={currencyInfo.code} value={currencyInfo.code}>
+                          {currencyInfo.name} ({currencyInfo.symbol})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
                 <FormMessage />
               </FormItem>
             )}

@@ -120,7 +120,18 @@ const TripDetailsForm = React.forwardRef<TripDetailsFormRef, TripDetailsFormProp
           return null;
         }
         ,
-        resetForm: (data?: TripDetailsFormData | null) => form.reset(data ?? undefined)
+        resetForm: (data?: TripDetailsFormData | null) => {
+          // Clear the component's own draft from local storage to prevent re-population
+          localStorage.removeItem(DRAFT_KEY);
+
+          // Reset the form with base values, including resetting dates to default
+          const baseValues = getBaseTripFormValues();
+          form.reset(data || {
+            ...baseValues,
+            tripStartDate: new Date(),
+            tripEndDate: new Date(),
+          });
+        },
       };
     });
 

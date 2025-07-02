@@ -15,7 +15,7 @@ import { TransactionType, Currency } from "@/types";
 import { useToast } from "@/hooks/use-toast";
 import { useHotkeys } from 'react-hotkeys-hook';
 import { Button } from "@/components/ui/button";
-import { Printer, Settings, ArrowRight, Save, ListChecks, Loader2, Edit } from "lucide-react";
+import { Printer, Settings, ArrowRight, Save, ListChecks, Loader2, Edit, Trash2 } from "lucide-react";
 import { DEFAULT_EXCHANGE_RATES_TO_EGP, loadExchangeRates as loadRatesFromLocal, saveExchangeRates as saveRatesToLocal } from "@/lib/exchangeRates";
 import ExchangeRateManager from "@/components/settings/ExchangeRateManager";
 import Link from "next/link";
@@ -32,6 +32,16 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface ReportDataPayload {
   tripDetails: TripDetailsFormData;
@@ -64,6 +74,8 @@ function ManageTripPageContent({ isGuest: propIsGuest }: ManageTripPageContentPr
   const [isExchangeRateManagerOpen, setIsExchangeRateManagerOpen] = React.useState(false);
   const [isSavingFullTrip, setIsSavingFullTrip] = React.useState(false);
   const [reportDataForPrint, setReportDataForPrint] = React.useState<ReportDataPayload | null>(null);
+  const [isResetConfirmOpen, setIsResetConfirmOpen] = React.useState(false);
+
 
   // Local filter state
   const [filters, setFilters] = React.useState<TransactionFilters>({});
@@ -382,6 +394,27 @@ function ManageTripPageContent({ isGuest: propIsGuest }: ManageTripPageContentPr
       setIsSavingFullTrip(false);
     }
   };
+
+  const executeResetTrip = () => {
+    setTransactions([]);
+    setCurrentTripDetails(null);
+    setEditingTripId(null);
+    
+    if (tripDetailsFormRef.current) {
+      tripDetailsFormRef.current.resetForm();
+    }
+
+    localStorage.removeItem('tripDetailsDraft');
+    localStorage.removeItem('transactionsDraft');
+    
+    // Clear the trip_id from the URL query params
+    router.push('/manage-trip', { scroll: false });
+
+    toast({
+      title: "تم حذف المسودة",
+      description: "يمكنك الآن البدء في تسجيل رحلة جديدة.",
+    });
+  };
   
   if (isLoadingPage) {
     return (
@@ -419,6 +452,10 @@ function ManageTripPageContent({ isGuest: propIsGuest }: ManageTripPageContentPr
                 عرض الرحلات المحفوظة
             </Button>
           )}
+          <Button onClick={() => setIsResetConfirmOpen(true)} variant="destructive">
+            <Trash2 className="ms-2 h-4 w-4" />
+            حذف المسودة وبدأ تسجيل رحلة جديدة
+          </Button>
         </div>
       </div>
       
@@ -463,6 +500,21 @@ function ManageTripPageContent({ isGuest: propIsGuest }: ManageTripPageContentPr
       <div className={cn("print-only", !reportDataForPrint && "hidden")}>
         {reportDataForPrint && <PrintableReport transactions={reportDataForPrint.transactions} exchangeRates={reportDataForPrint.exchangeRates} tripDetails={reportDataForPrint.tripDetails} />}
       </div>
+
+      <AlertDialog open={isResetConfirmOpen} onOpenChange={setIsResetConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>هل أنت متأكد تمامًا؟</AlertDialogTitle>
+            <AlertDialogDescription>
+              سيؤدي هذا الإجراء إلى حذف مسودة الرحلة الحالية بشكل دائم. لا يمكن التراجع عن هذا الإجراء.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <AlertDialogAction onClick={executeResetTrip} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">نعم، احذف المسودة</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
